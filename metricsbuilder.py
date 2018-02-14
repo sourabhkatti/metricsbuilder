@@ -20,11 +20,11 @@ class controller:
     # Replace the below fields with your own details #
     ##################################################
 
-    ORGANIZATION_ID = "17d3f7ac-b07c-4de4-b488-3f0fb489aeca"
-    TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
-    API_KEY = "5cLnEjaXs0vUym80WWy6gNy4JUqkZ6qW"
-    SERVICE_KEY = "KSF5NLBPLGWW3LK7"
-    USERNAME = "ccates@itm21st.com"
+    ORGANIZATION_ID = ""
+    TEAMSERVER_URL = ""
+    API_KEY = ""
+    SERVICE_KEY = ""
+    USERNAME = ""
 
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
