@@ -20,11 +20,11 @@ class controller:
     # Replace the below fields with your own details #
     ##################################################
 
-    ORGANIZATION_ID = ""
-    TEAMSERVER_URL = ""
-    API_KEY = ""
-    SERVICE_KEY = ""
-    USERNAME = ""
+    # ORGANIZATION_ID = ""
+    # TEAMSERVER_URL = ""
+    # API_KEY = ""
+    # SERVICE_KEY = ""
+    # USERNAME = ""
 
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
@@ -252,7 +252,7 @@ class controller:
             print("\nUnable to connect to the teamserver")
         filewriter.close()
 
-    # def getServersWithNoApplications(self):
+        # def getServersWithNoApplications(self):
         # The endpoint automatically returns all servers with no applications
         endpoint = self.ORGANIZATION_ID + '/servers/filter?applicationsIds=None'
         url = self.TEAMSERVER_URL + endpoint
@@ -328,192 +328,192 @@ class controller:
                     print(e)
                     continue
 
-    def metricsbuilder(self, days):
-        # Fail the command if the number of days is not positive
+    def getPercentUsersLoggedIn(self, days):
+        endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
+                                          "skip_links&offset=0&q=&quickFilter=ALL&sort=name"
+        url = self.TEAMSERVER_URL + endpoint
+        header = {
+            "API-Key": self.API_KEY,
+            "Authorization": self.AUTHORIZATION,
+        }
+        response = requests.get(url=url, headers=header, stream=True)
+        jsonreader = json.loads(response.text)
 
-        # https://app.contrastsecurity.com/Contrast/api/ng/142bb017-de7e-4af7-b5b9-f0782aa6d369/security/audit?expand=skip_links&limit=20&offset=0&startDate=2017-12-28
+        # Setup file to output the text to
+        filestring = "/usage_metrics.csv"
+        filename = self.outputpath + filestring
+        filewriter = open(filename, 'w+')
 
-        if days < -1:
-            print("\n* * The number of days must be greater than 0")
-
-        else:
-            endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
-                                              "skip_links&offset=0&q=&quickFilter=ALL&sort=name"
-            url = self.TEAMSERVER_URL + endpoint
-            header = {
-                "API-Key": self.API_KEY,
-                "Authorization": self.AUTHORIZATION,
-            }
-            # 18
-            # Send the request and get its response
-            response = requests.get(url=url, headers=header, stream=True)
-            jsonreader = json.loads(response.text)
-
-            # Setup file to output the text to
-            filestring = "/usage_metrics.csv"
-            filename = self.outputpath + filestring
-            filewriter = open(filename, 'w+')
-
-            # Loop through each user and get their last login time, compare it to the specified # of days
-            if jsonreader["success"] is True:
-                total_users = jsonreader["users"].__len__()
-                print("\nThe following users have not logged into the teamserver for more than %d day(s):" % days)
-                # filewriter.write(
-                #     "The following users have not logged into the teamserver for more than %d day(s):\n" % days)
-                usercount = 0
-                for user in jsonreader["users"]:
-                    try:
-                        # Get the user's last login time and convert it to a string
-                        lastlogintime = datetime.datetime.fromtimestamp(
-                            user['login']['last_login_time'] / 1000.0).strftime(
-                            '%Y-%m-%d')
-
-                        # Parse out month, day and year and find the difference between today and that date
-                        year, month, day = lastlogintime.split("-")
-                        dt_lastlogintime = datetime.datetime(int(year), int(month), int(day))
-                        todaydate = datetime.datetime.today()
-                        date_diff = (todaydate - dt_lastlogintime).days
-
-                        earlier_date = (datetime.datetime.today() - datetime.timedelta(days)).strftime("%Y-%m-%d")
-                        todaydate_formatted = todaydate.strftime("%Y-%m-%d")
-
-                        # If difference between dates is greater than the one specified, add it to our output
-                        if float(date_diff) < float(days):
-                            usercount += 1
-
-                    except Exception as e:
-                        # print(e)
-                        continue
-                login_percentage = float(float(usercount) / float(total_users)) * 100.0
-                print(str(login_percentage) + "% of users have logged into teamserver the past " + str(days) + " days.\n")
-                # linetowrite = (str(earlier_date) + "," + str(todaydate_formatted) + ',' + str(login_percentage) + ',')
-
-            earlier_date = (datetime.datetime.today() - datetime.timedelta(days)).strftime("%Y-%m-%d")
-            endpoint = self.ORGANIZATION_ID + "/security/audit?expand=skip_links&limit=1000000&startDate=%s" % earlier_date
-
-            url = self.TEAMSERVER_URL + endpoint
-            header = {
-                "API-Key": self.API_KEY,
-                "Authorization": self.AUTHORIZATION,
-            }
-            # 18
-            # Send the request and get its response
-            response = requests.get(url=url, headers=header, stream=True)
-            jsonreader = json.loads(response.text)
-
-            trace_status_change_counter = 0
-            trace_num = 0
-            # trace_status_matcher = re.compile('([\w\.]+@[\w\.]+com)\smarked status to (\w+).+([\d\w]{4}-[\d\w]{4}-[\d\w]{4}-[\d\w]{4})')
-            trace_status_matcher = re.compile('([\w\.]+@[\w\.]+com)\smarked status to (\w+).+\s[for traces\(\)]+([\w\d\-\,]+)')
-            trace_status_keyword = "trace_status_change"
-
-            trace_deleted_counter = 0
-            trace_deleted_keyword = "trace_deleted"
-
-            report_usage_counter = 0
-            report_usage_keyword = "report_generated"
-
-            agent_downloaded_counter = 0
-            agent_downloaded_keyword = "agent_download"
-
-            license_applied_counter = 0
-            license_applied_keyword = "license_applied"
-
-            linetowrite = ""
-            print("Total number of lines: ", jsonreader['logs'].__len__())
-            filewriter.write("date,action,username,message\n")
-            for log in jsonreader['logs']:
-                log_message = log['message']
-
-                epoch_timestamp = log['date']
-                timestamp = datetime.datetime.fromtimestamp(epoch_timestamp / 1000.0).strftime('%Y-%m-%d')
-                username = ""
-                message = ""
-                keyword = ""
-
-                line = ""
-
-                trace_status_matches = trace_status_matcher.findall(log_message)
-                if trace_status_matches:
-                    username = trace_status_matches[0][0]
-                    message = trace_status_matches[0][1]
-                    keyword = trace_status_keyword
-                    trace_status_change_counter += 1
-                    trace_num = trace_status_matches[0][2].count(",") + 1
-
-                elif log_message.__contains__("deleted trace"):
-                    trace_deleted_matcher = re.compile("User\s([\.\@\w]+)\sdeleted\strace\s([A-Z0-9\-]+)")
-                    matches = trace_deleted_matcher.findall(log_message)
-                    try:
-                        username = matches[0][0]
-                        message = matches[0][1]
-                    except:
-                        username = "na"
-                        message = "na"
-                    keyword = trace_deleted_keyword
-                    trace_deleted_counter += 1
-                elif log_message.__contains__("report"):
-                    report_downloaded_matcher = re.compile("User\s([\.\@\w]+)\screated a new report")
-                    matches = report_downloaded_matcher.findall(log_message)
-                    try:
-                        username = matches[0]
-                    except:
-                        username = ""
-                    message = "report generated"
-                    keyword = report_usage_keyword
-                    report_usage_counter += 1
-                elif log_message.__contains__("downloaded") and not log_message.__contains__("agent_"):
-                    # agent_download_matcher = re.compile('\@.+downloaded\s(\w+)\s\w+')
-                    agent_download_matcher = re.compile('User\s([\w\@\.]+com)[downloaded\s]+([\w\s\_\.]+)[a|A]gent')
-                    keyword = agent_downloaded_keyword
-                    try:
-                        matches = agent_download_matcher.findall(log_message)
-                        username = matches[0][0]
-                        if log_message.__contains__("JAVA_LAUNCHER"):
-                            message = "JAVA_LAUNCHER"
-                        else:
-                            message = matches[0][1]
-                    except:
-                        message = "na"
-                        username = "na"
-                    agent_downloaded_counter += 1
-                elif log_message.__contains__("License"):
-                    # license_applied_matcher = re.compile("Enterprise License[\s\w\:]+\'([\w\s\\\'\:]+)\'[\sby]+(.+)")
-                    # license_applied_matcher = re.compile("Enterprise License applied to application:[\s\\\']+(.+)[\\\'\s]+by\s(.+)")
-                    license_applied_matcher = re.compile("Enterprise License applied to application:[\s\\\']+(.+)\'[\\\'\s]+by\s(.+)")
-                    license_applied_matches = license_applied_matcher.findall(log_message)
-                    keyword = license_applied_keyword
-                    try:
-                        username = license_applied_matches[0][1]
-                        message = license_applied_matches[0][0]
-                    except:
-                        username = "na"
-                        message = "na"
-                    license_applied_counter += 1
-
-                # print(log_message)
+        # Loop through each user and get their last login time, compare it to the specified # of days
+        if jsonreader["success"] is True:
+            total_users = jsonreader["users"].__len__()
+            print("\nThe following users have not logged into the teamserver for more than %d day(s):" % days)
+            usercount = 0
+            for user in jsonreader["users"]:
                 try:
-                    if username is not "":
-                        if keyword is "trace_status_change":
-                            for trace in range(0, trace_num):
-                                print(log_message)
-                                line = timestamp + ',' + keyword + ',' + username + ',' + message + ',\n'
-                                filewriter.write(line)
-                                print(line)
-                        else:
+                    # Get the user's last login time and convert it to a string
+                    lastlogintime = datetime.datetime.fromtimestamp(
+                        user['login']['last_login_time'] / 1000.0).strftime(
+                        '%Y-%m-%d')
+
+                    # Parse out month, day and year and find the difference between today and that date
+                    year, month, day = lastlogintime.split("-")
+                    dt_lastlogintime = datetime.datetime(int(year), int(month), int(day))
+                    todaydate = datetime.datetime.today()
+                    date_diff = (todaydate - dt_lastlogintime).days
+
+                    earlier_date = (datetime.datetime.today() - datetime.timedelta(days)).strftime("%Y-%m-%d")
+                    todaydate_formatted = todaydate.strftime("%Y-%m-%d")
+
+                    # If difference between dates is greater than the one specified, add it to our output
+                    if float(date_diff) < float(days):
+                        usercount += 1
+
+                except Exception as e:
+                    # print(e)
+                    continue
+            login_percentage = float(float(usercount) / float(total_users)) * 100.0
+            print(str(login_percentage) + "% of users have logged into teamserver the past " + str(days) + " days.\n")
+
+    def parseAuditLog(self, days):
+
+        # Setup file to output the text to
+        filestring = "/usage_metrics.csv"
+        filename = self.outputpath + filestring
+        filewriter = open(filename, 'w+')
+
+        earlier_date = (datetime.datetime.today() - datetime.timedelta(days)).strftime("%Y-%m-%d")
+        endpoint = self.ORGANIZATION_ID + "/security/audit?expand=skip_links&limit=1000000&startDate=%s" % earlier_date
+
+        url = self.TEAMSERVER_URL + endpoint
+        header = {
+            "API-Key": self.API_KEY,
+            "Authorization": self.AUTHORIZATION,
+        }
+        # 18
+        # Send the request and get its response
+        response = requests.get(url=url, headers=header, stream=True)
+        jsonreader = json.loads(response.text)
+
+        trace_status_change_counter = 0
+        trace_num = 0
+
+        trace_status_keyword = "trace_status_change"
+
+        trace_deleted_counter = 0
+        trace_deleted_keyword = "trace_deleted"
+
+        report_usage_counter = 0
+        report_usage_keyword = "report_generated"
+
+        agent_downloaded_counter = 0
+        agent_downloaded_keyword = "agent_download"
+
+        license_applied_counter = 0
+        license_applied_keyword = "license_applied"
+
+        print("Total number of lines: ", jsonreader['logs'].__len__())
+        filewriter.write("date,action,username,message\n")
+        for log in jsonreader['logs']:
+            log_message = log['message']
+
+            epoch_timestamp = log['date']
+            timestamp = datetime.datetime.fromtimestamp(epoch_timestamp / 1000.0).strftime('%Y-%m-%d')
+            username = ""
+            message = ""
+            keyword = ""
+
+            line = ""
+
+            trace_status_matcher = re.compile(
+                '([\w\.]+@[\w\.]+com)\smarked status to (\w+).+\s[for traces\(\)]+([\w\d\-\,]+)')
+            trace_status_matches = trace_status_matcher.findall(log_message)
+            if trace_status_matches:
+                username = trace_status_matches[0][0]
+                message = trace_status_matches[0][1]
+                keyword = trace_status_keyword
+                trace_status_change_counter += 1
+                trace_num = trace_status_matches[0][2].count(",") + 1
+
+            elif log_message.__contains__("deleted trace"):
+                trace_deleted_matcher = re.compile("User\s([\.\@\w]+)\sdeleted\strace\s([A-Z0-9\-]+)")
+                matches = trace_deleted_matcher.findall(log_message)
+                try:
+                    username = matches[0][0]
+                    message = matches[0][1]
+                except:
+                    username = "na"
+                    message = "na"
+                keyword = trace_deleted_keyword
+                trace_deleted_counter += 1
+            elif log_message.__contains__("report"):
+                report_downloaded_matcher = re.compile("User\s([\.\@\w]+)\screated a new report")
+                matches = report_downloaded_matcher.findall(log_message)
+                try:
+                    username = matches[0]
+                except:
+                    username = ""
+                message = "report generated"
+                keyword = report_usage_keyword
+                report_usage_counter += 1
+            elif log_message.__contains__("downloaded") and not log_message.__contains__("agent_"):
+                agent_download_matcher = re.compile('User\s([\w\@\.]+com)[downloaded\s]+([\w\s\_\.]+)[a|A]gent')
+                keyword = agent_downloaded_keyword
+                try:
+                    matches = agent_download_matcher.findall(log_message)
+                    username = matches[0][0]
+                    if log_message.__contains__("JAVA_LAUNCHER"):
+                        message = "JAVA_LAUNCHER"
+                    else:
+                        message = matches[0][1]
+                except:
+                    message = "na"
+                    username = "na"
+                agent_downloaded_counter += 1
+            elif log_message.__contains__("License"):
+                # license_applied_matcher = re.compile("Enterprise License[\s\w\:]+\'([\w\s\\\'\:]+)\'[\sby]+(.+)")
+                # license_applied_matcher = re.compile("Enterprise License applied to application:[\s\\\']+(.+)[\\\'\s]+by\s(.+)")
+                license_applied_matcher = re.compile(
+                    "Enterprise License applied to application:[\s\\\']+(.+)\'[\\\'\s]+by\s(.+)")
+                license_applied_matches = license_applied_matcher.findall(log_message)
+                keyword = license_applied_keyword
+                try:
+                    username = license_applied_matches[0][1]
+                    message = license_applied_matches[0][0]
+                except:
+                    username = "na"
+                    message = "na"
+                license_applied_counter += 1
+
+            try:
+                if username is not "":
+                    if keyword is "trace_status_change":
+                        for trace in range(0, trace_num):
                             print(log_message)
                             line = timestamp + ',' + keyword + ',' + username + ',' + message + ',\n'
                             filewriter.write(line)
                             print(line)
+                    else:
+                        print(log_message)
+                        line = timestamp + ',' + keyword + ',' + username + ',' + message + ',\n'
+                        filewriter.write(line)
+                        print(line)
 
                         # print("====> ",timestamp, keyword, username, message)
-                except:
-                    continue
+            except:
+                continue
 
+        filewriter.close()
 
+    def metricsbuilder(self, days):
 
-            # filewriter.write(linetowrite)
-            filewriter.close()
+        # Fail the command if the number of days is not positive
+        if days < -1:
+            print("\n* * The number of days must be greater than 0")
+
+        else:
+            self.getPercentUsersLoggedIn(days)
+            self.parseAuditLog(days)
 
     def test(self):
         diffdate = datetime.datetime.today() - datetime.timedelta(7)
@@ -523,10 +523,10 @@ class controller:
 
 controller = controller()
 # controller.getServersWithNoApplications()
-controller.getUsersLoggedInDays(days=60)
+# controller.getUsersLoggedInDays(days=60)
 # controller.getApplicationsWithNoGroup()
-controller.getNeverLoggedInUsers()
+# controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-controller.metricsbuilder(days=900)
+controller.metricsbuilder(days=90)
 # controller.test()
