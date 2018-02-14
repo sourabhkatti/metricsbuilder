@@ -464,7 +464,7 @@ class controller:
                     report_usage_counter += 1
                 elif log_message.__contains__("downloaded") and not log_message.__contains__("agent_"):
                     # agent_download_matcher = re.compile('\@.+downloaded\s(\w+)\s\w+')
-                    agent_download_matcher = re.compile('User\s([\w\@\.]+com)[downloaded\s]+([\w\s\_]+)[a|A]gent')
+                    agent_download_matcher = re.compile('User\s([\w\@\.]+com)[downloaded\s]+([\w\s\_\.]+)[a|A]gent')
                     keyword = agent_downloaded_keyword
                     try:
                         matches = agent_download_matcher.findall(log_message)
