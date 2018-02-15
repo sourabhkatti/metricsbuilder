@@ -27,6 +27,12 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
+    ORGANIZATION_ID = "8ba80086-ac02-4f24-a93b-383418c4b4c3"
+    TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
+    API_KEY = "u3aa7y4SiJRFir7mHb1XBEQswU713fJx"
+    SERVICE_KEY = "70EFG198PZ35B3LE"
+    USERNAME = "pdietrich@aclenscorp.com"
+
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
 
@@ -210,10 +216,10 @@ class controller:
                     # included in a group.
                     if jsonreader['group']['applications'] is not None:
                         applications_group = jsonreader['group']['applications']
-                    for application_group in applications_group:
-                        applications = application_group['applications']
-                        for application in applications:
-                            registered_application_ids.append(application['app_id'])
+                        for application_group in applications_group:
+                            applications = application_group['applications']
+                            for application in applications:
+                                registered_application_ids.append(application['app_id'])
                 else:
                     print("\nUnable to query individual group id")
 
@@ -523,11 +529,11 @@ class controller:
 
 
 controller = controller()
-controller.getServersWithNoApplications()
+# controller.getServersWithNoApplications()
 # controller.getUsersLoggedInDays(days=60)
-# controller.getApplicationsWithNoGroup()
+controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-# controller.metricsbuilder(days=90)
+controller.metricsbuilder(days=90)
 # controller.test()
