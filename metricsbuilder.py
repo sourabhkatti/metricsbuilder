@@ -13,6 +13,7 @@ import re
 # - Apps that are not associated with a group
 # - Servers with no apps
 # - All groups and users contained within them
+# - Export the audit log into a csv
 
 
 class controller:
@@ -252,7 +253,7 @@ class controller:
             print("\nUnable to connect to the teamserver")
         filewriter.close()
 
-        # def getServersWithNoApplications(self):
+    def getServersWithNoApplications(self):
         # The endpoint automatically returns all servers with no applications
         endpoint = self.ORGANIZATION_ID + '/servers/filter?applicationsIds=None'
         url = self.TEAMSERVER_URL + endpoint
@@ -522,11 +523,11 @@ class controller:
 
 
 controller = controller()
-# controller.getServersWithNoApplications()
+controller.getServersWithNoApplications()
 # controller.getUsersLoggedInDays(days=60)
 # controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-controller.metricsbuilder(days=90)
+# controller.metricsbuilder(days=90)
 # controller.test()
