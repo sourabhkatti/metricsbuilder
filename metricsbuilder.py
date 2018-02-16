@@ -27,12 +27,6 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
-    ORGANIZATION_ID = "8ba80086-ac02-4f24-a93b-383418c4b4c3"
-    TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
-    API_KEY = "u3aa7y4SiJRFir7mHb1XBEQswU713fJx"
-    SERVICE_KEY = "70EFG198PZ35B3LE"
-    USERNAME = "pdietrich@aclenscorp.com"
-
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
 
@@ -118,7 +112,8 @@ class controller:
                     user_num += 1
         filewriter.close()
 
-    def getUsersLoggedInDays(self, days):
+    def getUsersNotLoggedInDays(self, days):
+        #returns all users who have not logged in during the last "days" number of days
         # Fail the command if the number of days is not positive
         if days < -1:
             print("\n* * The number of days must be greater than 0")
@@ -143,9 +138,9 @@ class controller:
 
             # Loop through each user and get their last login time, compare it to the specified # of days
             if jsonreader["success"] is True:
-                print("\nThe following users have logged into the teamserver in the last %d day(s):" % days)
+                print("\nThe following users have NOT logged into the teamserver in the last %d day(s):" % days)
                 filewriter.write(
-                    "The following users have logged into the teamserver in the last %d day(s):\n" % days)
+                    "The following users have NOT logged into the teamserver in the last %d day(s):\n" % days)
                 usercount = 1
                 for user in jsonreader["users"]:
                     try:
@@ -161,7 +156,7 @@ class controller:
                         date_diff = (todaydate - dt_lastlogintime).days
 
                         # If difference between dates is greater than the one specified, add it to our output
-                        if float(date_diff) < float(days):
+                        if float(date_diff) > float(days):
                             linetowrite = (
                                 "\t%d. %s logged in %d days ago" % (usercount, user['user_uid'], date_diff))
                             filewriter.write(linetowrite + "\n")
@@ -354,7 +349,7 @@ class controller:
         # Loop through each user and get their last login time, compare it to the specified # of days
         if jsonreader["success"] is True:
             total_users = jsonreader["users"].__len__()
-            print("\nThe following users have not logged into the teamserver for more than %d day(s):" % days)
+            #print("\nThe following users have logged into the teamserver for more than %d day(s):" % days)
             usercount = 0
             for user in jsonreader["users"]:
                 try:
@@ -379,7 +374,7 @@ class controller:
                 except Exception as e:
                     # print(e)
                     continue
-            login_percentage = float(float(usercount) / float(total_users)) * 100.0
+            login_percentage = int(round(float(float(usercount) / float(total_users)) * 100.0))
             print(str(login_percentage) + "% of users have logged into teamserver the past " + str(days) + " days.\n")
 
     def parseAuditLog(self, days):
@@ -529,11 +524,11 @@ class controller:
 
 
 controller = controller()
-# controller.getServersWithNoApplications()
-# controller.getUsersLoggedInDays(days=60)
+controller.getServersWithNoApplications()
+controller.getUsersNotLoggedInDays(days=30)
 controller.getApplicationsWithNoGroup()
-# controller.getNeverLoggedInUsers()
-# controller.getOfflineServers()
-# controller.getUsersInGroups()
+controller.getNeverLoggedInUsers()
+controller.getOfflineServers()
+controller.getUsersInGroups()
 controller.metricsbuilder(days=90)
 # controller.test()
