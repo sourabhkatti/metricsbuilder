@@ -42,7 +42,6 @@ class controller:
     SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
     USERNAME = "sourabh.katti@contrastsecurity.com"
     AUTHORIZATION = ""
-
     header = {}
 
     FOUND_DATE = "FIRST"
@@ -662,122 +661,77 @@ class controller:
             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
             yearlyMetrics[year_index] = monthlyMetrics
 
-        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics,
-                                                                                 printMetrics=printMetrics)
-        # print(cumulative_yearly_metrics)
+        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics, printMetrics=printMetrics)
+        print(cumulative_yearly_metrics)
         self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories, printMetrics)
 
     def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, printMetrics):
-        cumulative_metrics_filename = self.outputpath + "/CumulativeMetrics.csv"
-        cumulative_filewriter = open(cumulative_metrics_filename, 'w+')
+        filename = self.outputpath + "/CumulativeMetrics.csv"
+        filewriter = open(filename, 'w+')
 
-        serious_metrics = self.outputpath + "/SeriousMetrics.csv"
-        serious_filewriter = open(serious_metrics, 'w+')
-
-        metrics_linetowrite = [
-            "Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
-
-        serious_category_header = "Year,Month"
-        serious_category_total = 0
-        serious_category_lines = []
-        # for category in serious_categories:
-        #     serious_category_linetowrite += str(category) + ','
-
-        for category in serious_categories.keys():
-            serious_category_header += ',' + category
-        serious_category_header += ',Total'
+        metrics_linetowrite = ["Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
+        serious_category_linetowrite = ""
+        for category in serious_categories:
+            serious_category_linetowrite += str(category) + ','
 
         for year, monthlymetrics in cumulativeMetrics.items():
-            for month, metrics in monthlymetrics.items():
-                monthly_serious_category_count = 0
-                serious_category_linetowrite = str(year) + ',' + str(month) + ','
-                mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(
-                    metrics[
-                        'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(
-                    metrics['cumulative_serious_traces'])
-                try:
-                    # Loop through all serious categories found during date range
-                    if serious_categories.__len__() > 0:
-                        # Loop through all serious categories in the month
-                        for category, total_category_count in serious_categories.items():
-                            # try:
-                            # If the category is the current serious metric
-                            if category in metrics['serious_category_counts'].keys():
-                                count = metrics['serious_category_counts'][category]
-                                monthly_serious_category_count += count
-                                serious_category_linetowrite += str(count) + ','
-                            else:
-                                serious_category_linetowrite += '0,'
-                    serious_category_total += monthly_serious_category_count
-                    # except:
-                    #     serious_category_linetowrite += '0,'
-                except Exception as e:
-                    print(e)
 
-                serious_category_linetowrite += str(monthly_serious_category_count)
+            for month, metrics in monthlymetrics.items():
+
+                if metrics is not -1:
+                    mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(metrics[
+                        'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(metrics[
+                                          'cumulative_serious_traces'])
+                    try:
+                        if metrics['serious_traces'] > 0:
+                            for category in serious_categories:
+                                for trace_category, count in metrics['serious_category_counts'].items():
+                                    if trace_category is category:
+                                        serious_category_linetowrite += str(count) + ','
+                                    else:
+                                        serious_category_linetowrite += '0,'
+                    except:
+                        for category in serious_categories:
+                            serious_category_linetowrite += '0,'
+                        print(serious_category_linetowrite)
+
+
+
+
+                else:
+                    mec_linetowrite = str(year) + ',' + month + ',' + "0,0,0,0"
                 metrics_linetowrite.append(mec_linetowrite)
-                serious_category_lines.append(serious_category_linetowrite)
 
         for line in metrics_linetowrite:
-            cumulative_filewriter.write(line + '\n')
+            filewriter.write(line + '\n')
 
-        serious_filewriter.write(serious_category_header + '\n')
-        for line in serious_category_lines:
-            serious_filewriter.write(line + '\n')
-        linetowrite = "Total,Total"
-        for count in serious_categories.values():
-            linetowrite += ',' + str(count)
-        linetowrite += ',' + str(serious_category_total)
-        serious_filewriter.write(linetowrite)
-
-        cumulative_filewriter.close()
-        serious_filewriter.close()
+        filewriter.close()
 
     # Calculate cumulative vulnerability metrics
     def getCumulativeCounts(self, yearlymetrics, printMetrics=True):
         cumulative_total_counts = 0
         cumulative_serious_total_counts = 0
-        serious_categories = {}
-        total_metrics = 0
-        serious_traces = 0
-        changed_status = 0
-        remediated_status = 0
+        serious_categories = set()
         for year, monthlymetrics in yearlymetrics.items():
             for month, metrics in monthlymetrics.items():
-                # try:
-                cumulative_total_counts += metrics['total_traces']
-                cumulative_serious_total_counts += metrics['serious_traces']
-                total_metrics = metrics['total_traces']
-                serious_traces = metrics['serious_traces']
-                changed_status = metrics['changed_status']
-                remediated_status = metrics['remediated_status']
+                try:
+                    cumulative_total_counts += metrics['total_traces']
+                    cumulative_serious_total_counts += metrics['serious_traces']
 
-                metrics['cumulative_total_traces'] = cumulative_total_counts
-                metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
+                    metrics['cumulative_total_traces'] = cumulative_total_counts
+                    metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
 
-                if metrics['serious_category_counts'].__len__() > 0:
-                    monthly_serious_categories = metrics['serious_category_counts']
-                    for category, count in monthly_serious_categories.items():
-                        if category in serious_categories.keys():
-                            serious_categories[category] += count
-                        else:
-                            serious_categories[category] = count
-                else:
-                    pass
-                if printMetrics:
-                    print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
-                          cumulative_serious_total_counts)
-                    # except Exception as e:
-                    #     metrics['cumulative_total_traces'] = cumulative_total_counts
-                    #     metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
-                    #     metrics['total_traces'] = total_metrics
-                    #     metrics['serious_traces'] = serious_traces
-                    #     metrics['changed_status'] = changed_status
-                    #     metrics['remediated_status'] = remediated_status
-                    #     metrics['cumulative_total_traces'] = cumulative_total_counts
-                    #     metrics['serious_category_counts'] = serious_categories
-                    #     if printMetrics:
-                    #         print(e)
+                    if metrics['serious_category_counts'].__len__() > 0:
+                        categories = metrics['serious_category_counts'].keys()
+                        for category in categories:
+                                serious_categories.add(category)
+                    if printMetrics:
+                        print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
+                              cumulative_serious_total_counts)
+                except Exception as e:
+                    if printMetrics:
+                        print(year, month, "no new vulns")
+                        print(e)
         return yearlymetrics, serious_categories
 
     # Get vulnerabilities based on the specified date range
@@ -803,7 +757,7 @@ class controller:
         except Exception as e:
             print("ERROR: Unable to connect to teamserver. Please check your authentication details.")
             print(e)
-            return {}
+            return -1
 
     # Parse vulnerabilities and build metrics
     def getVulnMetrics(self, vulns):
@@ -865,12 +819,7 @@ class controller:
 
             else:
                 print("\tThere were no traces found during the specified date range")
-                metrics['serious_traces'] = 0
-                metrics['changed_status'] = 0
-                metrics['remediated_status'] = 0
-                metrics['total_traces'] = 0
-                metrics['serious_category_counts'] = {}
-                return metrics
+                return -1
         except:
             print("Could not parse retrieved vulnerabilities")
             return -1
@@ -891,38 +840,10 @@ class controller:
         except:
             print("ERROR: Unable to retrieve applications")
 
-    def getApplicationsWithNoTag(self):
-
-        search_text = "BU:"
-        endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
-        url = self.TEAMSERVER_URL + endpoint
-
-        response = requests.get(url=url, headers=self.header, stream=True)
-        jsonreader = json.loads(response.text)
-
-        # filename = '/appsWithNoBU.csv'
-        # filewriter = open(filename, 'w+')
-
-        applications = jsonreader['applications']
-        app_count = 0
-        for application in applications:
-            tagged = False
-            tags = application['tags']
-            try:
-                for tag in tags:
-                    datatag = tag.find(search_text)
-                    if datatag is not -1:
-                        tagged = True
-            except:
-                # print(application['name'])
-                pass
-            if not tagged:
-                app_count += 1
-                print(str(app_count) + ". " + application['name'])
-                # filewriter.close()
-
     def test(self):
-        pass
+        diffdate = datetime.datetime.today() - datetime.timedelta(7)
+        # diff_date = todaydate - datetime.timedelta(7)
+        print(diffdate.strftime("%Y-%m-%d"))
 
 
 controller = controller()
@@ -934,5 +855,5 @@ controller = controller()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
 controller.dateTrendManager()
-# controller.getApplications()
-controller.test()
+controller.getApplications()
+# controller.test()
