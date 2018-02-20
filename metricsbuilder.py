@@ -28,20 +28,8 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
-    # personal apptwo account
-    # TEAMSERVER_BASE_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
-    # ORGANIZATION_UUID = "f7ea7169-d4eb-42c4-b32e-5c0ea0ca9733"
-    # API_KEY = "KpAoBf7Plj71LFl4ihODRX8CgFh8hyO8"
-    # SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
-    # USERNAME = "sourabh.katti@contrastsecurity.com"
 
-    # product apptwo account
-    TEAMSERVER_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
-    ORGANIZATION_ID = "0f767995-4882-4c7c-889f-994d945ff0d5"
-    API_KEY = "B6Y14MfSBsmLC6k4GxhIlGk297ZuvG9N"
-    SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
-    USERNAME = "sourabh.katti@contrastsecurity.com"
-    AUTHORIZATION = ""
+
     header = {}
 
     FOUND_DATE = "FIRST"
@@ -661,15 +649,17 @@ class controller:
             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
             yearlyMetrics[year_index] = monthlyMetrics
 
-        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics, printMetrics=printMetrics)
-        print(cumulative_yearly_metrics)
+        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics,
+                                                                                 printMetrics=printMetrics)
+        # print(cumulative_yearly_metrics)
         self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories, printMetrics)
 
     def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, printMetrics):
         filename = self.outputpath + "/CumulativeMetrics.csv"
         filewriter = open(filename, 'w+')
 
-        metrics_linetowrite = ["Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
+        metrics_linetowrite = [
+            "Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
         serious_category_linetowrite = ""
         for category in serious_categories:
             serious_category_linetowrite += str(category) + ','
@@ -679,9 +669,10 @@ class controller:
             for month, metrics in monthlymetrics.items():
 
                 if metrics is not -1:
-                    mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(metrics[
-                        'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(metrics[
-                                          'cumulative_serious_traces'])
+                    mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(
+                        metrics[
+                            'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(metrics[
+                                                                                                               'cumulative_serious_traces'])
                     try:
                         if metrics['serious_traces'] > 0:
                             for category in serious_categories:
@@ -724,7 +715,7 @@ class controller:
                     if metrics['serious_category_counts'].__len__() > 0:
                         categories = metrics['serious_category_counts'].keys()
                         for category in categories:
-                                serious_categories.add(category)
+                            serious_categories.add(category)
                     if printMetrics:
                         print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
                               cumulative_serious_total_counts)
@@ -840,10 +831,35 @@ class controller:
         except:
             print("ERROR: Unable to retrieve applications")
 
-    def test(self):
-        diffdate = datetime.datetime.today() - datetime.timedelta(7)
-        # diff_date = todaydate - datetime.timedelta(7)
-        print(diffdate.strftime("%Y-%m-%d"))
+    def getApplicationsWithNoTag(self):
+
+        search_text = "BU:"
+        endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
+        url = self.TEAMSERVER_URL + endpoint
+
+        response = requests.get(url=url, headers=self.header, stream=True)
+        jsonreader = json.loads(response.text)
+
+        # filename = '/appsWithNoBU.csv'
+        # filewriter = open(filename, 'w+')
+
+        applications = jsonreader['applications']
+        app_count = 0
+        for application in applications:
+            tagged = False
+            tags = application['tags']
+            try:
+                for tag in tags:
+                    datatag = tag.find(search_text)
+                    if datatag is not -1:
+                        tagged = True
+            except:
+                # print(application['name'])
+                pass
+            if not tagged:
+                app_count += 1
+                print(str(app_count) + ". " + application['name'])
+                # filewriter.close()
 
 
 controller = controller()
@@ -854,6 +870,6 @@ controller = controller()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
-controller.dateTrendManager()
-controller.getApplications()
-# controller.test()
+# controller.dateTrendManager()
+# controller.getApplications()
+controller.test()
