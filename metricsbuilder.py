@@ -5,6 +5,7 @@ import requests
 import argparse
 import datetime
 import re
+import calendar
 
 
 # - Offline servers
@@ -27,6 +28,39 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
+    # personal apptwo account
+    # TEAMSERVER_BASE_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
+    # ORGANIZATION_UUID = "f7ea7169-d4eb-42c4-b32e-5c0ea0ca9733"
+    # API_KEY = "KpAoBf7Plj71LFl4ihODRX8CgFh8hyO8"
+    # SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
+    # USERNAME = "sourabh.katti@contrastsecurity.com"
+
+    # product apptwo account
+    TEAMSERVER_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
+    ORGANIZATION_ID = "0f767995-4882-4c7c-889f-994d945ff0d5"
+    API_KEY = "B6Y14MfSBsmLC6k4GxhIlGk297ZuvG9N"
+    SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
+    USERNAME = "sourabh.katti@contrastsecurity.com"
+    AUTHORIZATION = ""
+
+    header = {}
+
+    FOUND_DATE = "FIRST"
+    SORTING = "ALL"
+
+    # Starting date: January 1, 2018
+    startingMonth = 1
+    startingDay = 1
+    startingYear = 2017
+
+    # Ending date: February 10, 2018
+    endingMonth = 2
+    endingDay = 10
+    endingYear = 2018
+
+    endTimeEpoch = 0
+    startTimeEpoch = 0
+
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
 
@@ -40,9 +74,11 @@ class controller:
             self.outputpath = os.getcwd()
         print("Writing output to", self.outputpath)
 
-        # print("\nController started\n")
-
         self.AUTHORIZATION = base64.b64encode((self.USERNAME + ':' + self.SERVICE_KEY).encode('utf-8'))
+        self.header = {
+            "Authorization": self.AUTHORIZATION,
+            "API-Key": self.API_KEY
+        }
 
     def getOfflineServers(self):
         endpoint = self.ORGANIZATION_ID + "/servers/filter?expand=applications,server_license," \
@@ -113,7 +149,7 @@ class controller:
         filewriter.close()
 
     def getUsersNotLoggedInDays(self, days):
-        #returns all users who have not logged in during the last "days" number of days
+        # returns all users who have not logged in during the last "days" number of days
         # Fail the command if the number of days is not positive
         if days < -1:
             print("\n* * The number of days must be greater than 0")
@@ -349,7 +385,7 @@ class controller:
         # Loop through each user and get their last login time, compare it to the specified # of days
         if jsonreader["success"] is True:
             total_users = jsonreader["users"].__len__()
-            #print("\nThe following users have logged into the teamserver for more than %d day(s):" % days)
+            # print("\nThe following users have logged into the teamserver for more than %d day(s):" % days)
             usercount = 0
             for user in jsonreader["users"]:
                 try:
@@ -517,18 +553,386 @@ class controller:
             self.getPercentUsersLoggedIn(days)
             self.parseAuditLog(days)
 
+    # Get date range for the vulnerabilities to pull from teamserver
+    def getDateRange(self):
+        if self.startingMonth is 0:
+            print("Please specify the date range to pull vulnerability information.")
+            self.startingMonth = int(input("\tStarting month number (1-12): "))
+            while self.startingMonth < 1 or self.startingMonth > 12:
+                print("The month should be between 1 and 12!")
+                self.startingMonth = int(input("\tStarting month number (1-12): "))
+
+        if self.startingDay is 0:
+            self.startingDay = int(input("\tStarting day (1-31): "))
+            while self.startingDay < 1 or self.startingDay > 31:
+                print("The day should be between 1 and 31!")
+                self.startingDay = int(input("\tStarting day (1-31): "))
+
+        if self.endingMonth is 0:
+            self.endingMonth = int(input("\tEnding month number (1-12): "))
+            while self.endingMonth < 1 or self.endingMonth > 12:
+                print("The month should be between 1 and 12!")
+                self.endingMonth = int(input("\tEnding month number (1-12): "))
+
+        if self.endingDay is 0:
+            self.endingDay = int(input("\tEnding day (1-31): "))
+            while self.endingDay < 1 or self.endingDay > 31:
+                print("The day should be between 1 and 31!")
+                self.endingDay = int(input("\tEnding day (1-31): "))
+
+    # Manage how vulnerabilities are associated with time
+    def dateTrendManager(self, printMetrics=True):
+
+        # Get the months and days we'll be looking through
+        self.getDateRange()
+
+        yearlyMetrics = {}
+
+        # Loop through all years
+        year_index = self.startingYear
+
+        # If time range spans multiple years, loop through all months in those years except the ending year
+        if year_index < self.endingYear:
+            # Loop through all months in  previous years
+            while year_index < self.endingYear:
+                monthlyMetrics = {}
+                for month_index in range(self.startingMonth, 13):
+                    month = datetime.datetime(year_index, month_index, 1).strftime("%B")
+                    endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
+                    self.startTimeEpoch = int(
+                        datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
+                    self.endTimeEpoch = int(
+                        datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
+                    print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+                        month, 1, year_index, month, endingDay, year_index))
+                    monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for the month
+                    print(self.startTimeEpoch, self.endTimeEpoch)
+                yearlyMetrics[year_index] = monthlyMetrics
+                year_index += 1
+
+            # Loop through all months in the current year except the last month
+            monthlyMetrics = {}
+            for month_index in range(1, self.endingMonth):
+                month = datetime.datetime(year_index, month_index, 1).strftime("%B")
+                endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
+                self.startTimeEpoch = int(
+                    datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
+                self.endTimeEpoch = int(
+                    datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
+                print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+                    month, 1, year_index, month, endingDay, year_index))
+                monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+
+            # Get vulns for the last month
+            month_index += 1
+            month = datetime.datetime(year_index, month_index, 1).strftime("%B")
+            self.startTimeEpoch = int(
+                datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
+            self.endTimeEpoch = int(
+                datetime.datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99).timestamp()) * 1000
+            print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+                month, 1, year_index, month, self.endingDay, year_index))
+            monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+            yearlyMetrics[year_index] = monthlyMetrics
+
+        else:
+
+            # If the starting year and ending year are the same, loop through all months except the last month
+            monthlyMetrics = {}
+            for month_index in range(self.startingMonth, self.endingMonth):
+                month = datetime.datetime(year_index, month_index, 1).strftime("%B")
+                endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
+                self.startTimeEpoch = int(
+                    datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
+                self.endTimeEpoch = int(
+                    datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
+                print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+                    month, 1, year_index, month, endingDay, year_index))
+                monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+
+            # Get vuln metrics for the last month
+            month_index += 1
+            month = datetime.datetime(year_index, month_index, 1).strftime("%B")
+            self.startTimeEpoch = int(
+                datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
+            self.endTimeEpoch = int(
+                datetime.datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99).timestamp()) * 1000
+            print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+                month, 1, year_index, month, self.endingDay, year_index))
+            monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+            yearlyMetrics[year_index] = monthlyMetrics
+
+        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics,
+                                                                                 printMetrics=printMetrics)
+        # print(cumulative_yearly_metrics)
+        self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories, printMetrics)
+
+    def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, printMetrics):
+        cumulative_metrics_filename = self.outputpath + "/CumulativeMetrics.csv"
+        cumulative_filewriter = open(cumulative_metrics_filename, 'w+')
+
+        serious_metrics = self.outputpath + "/SeriousMetrics.csv"
+        serious_filewriter = open(serious_metrics, 'w+')
+
+        metrics_linetowrite = [
+            "Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
+
+        serious_category_header = "Year,Month"
+        serious_category_total = 0
+        serious_category_lines = []
+        # for category in serious_categories:
+        #     serious_category_linetowrite += str(category) + ','
+
+        for category in serious_categories.keys():
+            serious_category_header += ',' + category
+        serious_category_header += ',Total'
+
+        for year, monthlymetrics in cumulativeMetrics.items():
+            for month, metrics in monthlymetrics.items():
+                monthly_serious_category_count = 0
+                serious_category_linetowrite = str(year) + ',' + str(month) + ','
+                mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(
+                    metrics[
+                        'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(
+                    metrics['cumulative_serious_traces'])
+                try:
+                    # Loop through all serious categories found during date range
+                    if serious_categories.__len__() > 0:
+                        # Loop through all serious categories in the month
+                        for category, total_category_count in serious_categories.items():
+                            # try:
+                            # If the category is the current serious metric
+                            if category in metrics['serious_category_counts'].keys():
+                                count = metrics['serious_category_counts'][category]
+                                monthly_serious_category_count += count
+                                serious_category_linetowrite += str(count) + ','
+                            else:
+                                serious_category_linetowrite += '0,'
+                    serious_category_total += monthly_serious_category_count
+                    # except:
+                    #     serious_category_linetowrite += '0,'
+                except Exception as e:
+                    print(e)
+
+                serious_category_linetowrite += str(monthly_serious_category_count)
+                metrics_linetowrite.append(mec_linetowrite)
+                serious_category_lines.append(serious_category_linetowrite)
+
+        for line in metrics_linetowrite:
+            cumulative_filewriter.write(line + '\n')
+
+        serious_filewriter.write(serious_category_header + '\n')
+        for line in serious_category_lines:
+            serious_filewriter.write(line + '\n')
+        linetowrite = "Total,Total"
+        for count in serious_categories.values():
+            linetowrite += ',' + str(count)
+        linetowrite += ',' + str(serious_category_total)
+        serious_filewriter.write(linetowrite)
+
+        cumulative_filewriter.close()
+        serious_filewriter.close()
+
+    # Calculate cumulative vulnerability metrics
+    def getCumulativeCounts(self, yearlymetrics, printMetrics=True):
+        cumulative_total_counts = 0
+        cumulative_serious_total_counts = 0
+        serious_categories = {}
+        total_metrics = 0
+        serious_traces = 0
+        changed_status = 0
+        remediated_status = 0
+        for year, monthlymetrics in yearlymetrics.items():
+            for month, metrics in monthlymetrics.items():
+                # try:
+                cumulative_total_counts += metrics['total_traces']
+                cumulative_serious_total_counts += metrics['serious_traces']
+                total_metrics = metrics['total_traces']
+                serious_traces = metrics['serious_traces']
+                changed_status = metrics['changed_status']
+                remediated_status = metrics['remediated_status']
+
+                metrics['cumulative_total_traces'] = cumulative_total_counts
+                metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
+
+                if metrics['serious_category_counts'].__len__() > 0:
+                    monthly_serious_categories = metrics['serious_category_counts']
+                    for category, count in monthly_serious_categories.items():
+                        if category in serious_categories.keys():
+                            serious_categories[category] += count
+                        else:
+                            serious_categories[category] = count
+                else:
+                    pass
+                if printMetrics:
+                    print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
+                          cumulative_serious_total_counts)
+                    # except Exception as e:
+                    #     metrics['cumulative_total_traces'] = cumulative_total_counts
+                    #     metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
+                    #     metrics['total_traces'] = total_metrics
+                    #     metrics['serious_traces'] = serious_traces
+                    #     metrics['changed_status'] = changed_status
+                    #     metrics['remediated_status'] = remediated_status
+                    #     metrics['cumulative_total_traces'] = cumulative_total_counts
+                    #     metrics['serious_category_counts'] = serious_categories
+                    #     if printMetrics:
+                    #         print(e)
+        return yearlymetrics, serious_categories
+
+    # Get vulnerabilities based on the specified date range
+    def getVulnsByDate(self):
+        print(
+            "Fetch Vulnerabilities, sorting by " + self.SORTING + " and " + self.FOUND_DATE + " found in the date range...")
+
+        endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                "/filter/?endDate=" + str(
+            self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                 "skip_links&quickFilter=" + self.SORTING + "&limit=100000&sort=-lastTimeSeen&startDate=" + str(
+            self.startTimeEpoch) + \
+                   "&timestampFilter=" + self.FOUND_DATE
+
+        print("\tSending request to teamserver", end="")
+
+        try:
+            # Get all vulns which need an issue opened for them
+            r = requests.get(url=endpoint, headers=self.header)
+            vulns = json.loads(r.text)
+            print(".... Done!")
+            return self.getVulnMetrics(vulns['traces'])
+        except Exception as e:
+            print("ERROR: Unable to connect to teamserver. Please check your authentication details.")
+            print(e)
+            return {}
+
+    # Parse vulnerabilities and build metrics
+    def getVulnMetrics(self, vulns):
+        print("\nParsing Vulnerabilities...")
+
+        traceNum = vulns.__len__()
+
+        # total_traces = Total number of traces found in this time span
+        # serious_traces = Total number of CRITICAL or HIGH vulns
+        # serious_category_counts = Total number of serious categories and the number of vulns found in each one
+        # changed_status = Number of vulns with a status other than Reported
+        # remediated_status = Number of vulns with a status of Remediated, Not a Problem or Fixed
+        metrics = {}
+
+        try:
+            if traceNum > 0:
+                print("\tTotal number of traces: %d" % traceNum)
+                metrics['total_traces'] = traceNum
+
+                seriousVulnCounter = 0
+                seriousCategoryCounter = {}
+
+                remediatedStatusCount = 0
+                statusCount = 0
+                for vuln in vulns:
+
+                    # Check severity for serious vulns and increment counter for that severity
+                    if vuln['default_severity'] in ("CRITICAL", "HIGH"):
+                        seriousVulnCounter += 1
+                        if vuln['rule_name'] in seriousCategoryCounter.keys():
+                            seriousCategoryCounter[vuln['rule_name']] += 1
+                        else:
+                            seriousCategoryCounter[vuln['rule_name']] = 1
+
+                    if vuln['status'] in ("Remediated", "Fixed", "Not a Problem", "Suspicious", "Confirmed"):
+                        if vuln['status'] in ("Remediated", "Fixed", "Not a Problem"):
+                            remediatedStatusCount += 1
+                        statusCount += 1
+
+                print("\n\tSerious Vulnerabilities Metrics")
+                print("\t\t- Number of serious vulnerabilities: %d" % seriousVulnCounter)
+                metrics['serious_traces'] = seriousVulnCounter
+
+                category_counts = {}
+                for category, count in seriousCategoryCounter.items():
+                    print("\t\t\t* %s: %d" % (category, count))
+                    category_counts[category] = count
+                metrics['serious_category_counts'] = category_counts
+
+                print("\n\tVulnerability Status")
+                print("\t\t- Number of vulns in a status besides Reported:", statusCount)
+                metrics['changed_status'] = statusCount
+
+                print("\t\t- Number of vulnerabilities marked Remediated, Not a Problem or Fixed:",
+                      remediatedStatusCount)
+                metrics['remediated_status'] = remediatedStatusCount
+
+                return metrics
+
+            else:
+                print("\tThere were no traces found during the specified date range")
+                metrics['serious_traces'] = 0
+                metrics['changed_status'] = 0
+                metrics['remediated_status'] = 0
+                metrics['total_traces'] = 0
+                metrics['serious_category_counts'] = {}
+                return metrics
+        except:
+            print("Could not parse retrieved vulnerabilities")
+            return -1
+
+    # Get application metrics (count of applications)
+    def getApplications(self):
+        print("\nApplication Metrics")
+        endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/applications/filter?expand=scores,license," \
+                                                                "trace_breakdown,compliance_policy," \
+                                                                "production_protected," \
+                                                                "skip_links&filterText=&includeArchived=false" \
+                                                                "&includeMerged=true&limit=100000&quickFilter" \
+                                                                "=ALL&sort=appName"
+        try:
+            r = requests.get(url=endpoint, headers=self.header)
+            applications = json.loads(r.text)
+            print("\t- Number of applications:", applications['applications'].__len__())
+        except:
+            print("ERROR: Unable to retrieve applications")
+
+    def getApplicationsWithNoTag(self):
+
+        search_text = "BU:"
+        endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
+        url = self.TEAMSERVER_URL + endpoint
+
+        response = requests.get(url=url, headers=self.header, stream=True)
+        jsonreader = json.loads(response.text)
+
+        # filename = '/appsWithNoBU.csv'
+        # filewriter = open(filename, 'w+')
+
+        applications = jsonreader['applications']
+        app_count = 0
+        for application in applications:
+            tagged = False
+            tags = application['tags']
+            try:
+                for tag in tags:
+                    datatag = tag.find(search_text)
+                    if datatag is not -1:
+                        tagged = True
+            except:
+                # print(application['name'])
+                pass
+            if not tagged:
+                app_count += 1
+                print(str(app_count) + ". " + application['name'])
+                # filewriter.close()
+
     def test(self):
-        diffdate = datetime.datetime.today() - datetime.timedelta(7)
-        # diff_date = todaydate - datetime.timedelta(7)
-        print(diffdate.strftime("%Y-%m-%d"))
+        pass
 
 
 controller = controller()
-controller.getServersWithNoApplications()
-controller.getUsersNotLoggedInDays(days=30)
-controller.getApplicationsWithNoGroup()
-controller.getNeverLoggedInUsers()
-controller.getOfflineServers()
-controller.getUsersInGroups()
-controller.metricsbuilder(days=90)
-# controller.test()
+# controller.getServersWithNoApplications()
+# controller.getUsersNotLoggedInDays(days=30)
+# controller.getApplicationsWithNoGroup()
+# controller.getNeverLoggedInUsers()
+# controller.getOfflineServers()
+# controller.getUsersInGroups()
+# controller.metricsbuilder(days=90)
+controller.dateTrendManager()
+# controller.getApplications()
+controller.test()
