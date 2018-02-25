@@ -28,21 +28,6 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
-    # personal apptwo account
-    # TEAMSERVER_BASE_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
-    # ORGANIZATION_UUID = "f7ea7169-d4eb-42c4-b32e-5c0ea0ca9733"
-    # API_KEY = "KpAoBf7Plj71LFl4ihODRX8CgFh8hyO8"
-    # SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
-    # USERNAME = "sourabh.katti@contrastsecurity.com"
-
-    # product apptwo account
-    TEAMSERVER_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
-    ORGANIZATION_ID = "0f767995-4882-4c7c-889f-994d945ff0d5"
-    API_KEY = "B6Y14MfSBsmLC6k4GxhIlGk297ZuvG9N"
-    SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
-    USERNAME = "sourabh.katti@contrastsecurity.com"
-    AUTHORIZATION = ""
-
     header = {}
 
     FOUND_DATE = "FIRST"
@@ -738,19 +723,11 @@ class controller:
         cumulative_total_counts = 0
         cumulative_serious_total_counts = 0
         serious_categories = {}
-        total_metrics = 0
-        serious_traces = 0
-        changed_status = 0
-        remediated_status = 0
         for year, monthlymetrics in yearlymetrics.items():
             for month, metrics in monthlymetrics.items():
                 # try:
                 cumulative_total_counts += metrics['total_traces']
                 cumulative_serious_total_counts += metrics['serious_traces']
-                total_metrics = metrics['total_traces']
-                serious_traces = metrics['serious_traces']
-                changed_status = metrics['changed_status']
-                remediated_status = metrics['remediated_status']
 
                 metrics['cumulative_total_traces'] = cumulative_total_counts
                 metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
@@ -767,17 +744,6 @@ class controller:
                 if printMetrics:
                     print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
                           cumulative_serious_total_counts)
-                    # except Exception as e:
-                    #     metrics['cumulative_total_traces'] = cumulative_total_counts
-                    #     metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
-                    #     metrics['total_traces'] = total_metrics
-                    #     metrics['serious_traces'] = serious_traces
-                    #     metrics['changed_status'] = changed_status
-                    #     metrics['remediated_status'] = remediated_status
-                    #     metrics['cumulative_total_traces'] = cumulative_total_counts
-                    #     metrics['serious_category_counts'] = serious_categories
-                    #     if printMetrics:
-                    #         print(e)
         return yearlymetrics, serious_categories
 
     # Get vulnerabilities based on the specified date range
