@@ -28,6 +28,21 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
+    # personal apptwo account
+    # TEAMSERVER_BASE_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
+    # ORGANIZATION_UUID = "f7ea7169-d4eb-42c4-b32e-5c0ea0ca9733"
+    # API_KEY = "KpAoBf7Plj71LFl4ihODRX8CgFh8hyO8"
+    # SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
+    # USERNAME = "sourabh.katti@contrastsecurity.com"
+
+    # product apptwo account
+    # TEAMSERVER_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
+    # ORGANIZATION_ID = "0f767995-4882-4c7c-889f-994d945ff0d5"
+    # API_KEY = "B6Y14MfSBsmLC6k4GxhIlGk297ZuvG9N"
+    # SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
+    # USERNAME = "sourabh.katti@contrastsecurity.com"
+    # AUTHORIZATION = ""
+
 
 
     header = {}
@@ -860,6 +875,9 @@ class controller:
                 app_count += 1
                 print(str(app_count) + ". " + application['name'])
                 # filewriter.close()
+
+    def test(self):
+        pass
 
 
 controller = controller()
