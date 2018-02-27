@@ -29,12 +29,6 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
-    ORGANIZATION_ID = "f7147a63-299d-4a6d-92db-b7421f2e9b32"
-    TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
-    API_KEY = "Kt4ohzQV4YVmy1497xDIw0XzoMCu8CHo"
-    SERVICE_KEY = "TOC7LDCPMC2A05PM"
-    USERNAME = "chris.g.perkins@medtronic.com"
-
     header = {}
 
     FOUND_DATE = "FIRST"
