@@ -29,23 +29,29 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
+    ORGANIZATION_ID = "f7147a63-299d-4a6d-92db-b7421f2e9b32"
+    TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
+    API_KEY = "Kt4ohzQV4YVmy1497xDIw0XzoMCu8CHo"
+    SERVICE_KEY = "TOC7LDCPMC2A05PM"
+    USERNAME = "chris.g.perkins@medtronic.com"
+
     header = {}
 
     FOUND_DATE = "FIRST"
     SORTING = "ALL"
-    LICENSED_ONLY = True
+    LICENSED_ONLY = False
     application_licensed_status = {}
 
     # Starting date: January 1, 2018
-    startingMonth = 12
+    startingMonth = 9
     startingDay = 1
     startingYear = 2017
     startingHour = 21
 
     # Ending date: February 10, 2018
-    endingMonth = 2
-    endingDay = 26
-    endingYear = 2018
+    endingMonth = 9
+    endingDay = 30
+    endingYear = 2017
     endingHour = 21
 
     endTimeEpoch = 0
@@ -590,7 +596,6 @@ class controller:
             # self.endTimeEpoch = int(
             #     datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
 
-
         # If time range spans multiple years, loop through all months in those years except the ending year
         if year_index < self.endingYear:
             # Loop through all months in  previous years
@@ -601,9 +606,11 @@ class controller:
                     month = datetime(year_index, month_index, 1).strftime("%B")
                     endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
                     self.startTimeEpoch = int((
-                        datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(hours=3)).timestamp()) * 1000
+                                                  datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+                                                      hours=3)).timestamp()) * 1000
                     self.endTimeEpoch = int((
-                        datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(hours=3)).timestamp()) * 1000
+                                                datetime(year_index, month_index, endingDay, 23, 59, 59,
+                                                         99) - timedelta(hours=3)).timestamp()) * 1000
                     print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
                         month, 1, year_index, month, endingDay, year_index))
                     monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for the month
@@ -618,9 +625,11 @@ class controller:
                 month = datetime(year_index, month_index, 1).strftime("%B")
                 endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
                 self.startTimeEpoch = int((
-                                              datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(hours=3)).timestamp()) * 1000
+                                              datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+                                                  hours=3)).timestamp()) * 1000
                 self.endTimeEpoch = int((
-                                            datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(hours=3)).timestamp()) * 1000
+                                            datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
+                                                hours=3)).timestamp()) * 1000
                 print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
                     month, 1, year_index, month, endingDay, year_index))
                 monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
@@ -629,9 +638,11 @@ class controller:
             month_index = self.endingMonth
             month = datetime(year_index, month_index, 1).strftime("%B")
             self.startTimeEpoch = int((
-                                          datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(hours=3)).timestamp()) * 1000
+                                          datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+                                              hours=3)).timestamp()) * 1000
             self.endTimeEpoch = int((
-                                        datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(hours=3)).timestamp()) * 1000
+                                        datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
+                                            hours=3)).timestamp()) * 1000
             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
                 month, 1, year_index, month, self.endingDay, year_index))
             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
@@ -645,9 +656,11 @@ class controller:
                 month = datetime(year_index, month_index, 1).strftime("%B")
                 endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
                 self.startTimeEpoch = int((
-                                              datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(hours=3)).timestamp()) * 1000
+                                              datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+                                                  hours=3)).timestamp()) * 1000
                 self.endTimeEpoch = int((
-                                            datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(hours=3)).timestamp()) * 1000
+                                            datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
+                                                hours=3)).timestamp()) * 1000
                 print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
                     month, 1, year_index, month, endingDay, year_index))
                 monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
@@ -656,9 +669,11 @@ class controller:
             month_index = self.endingMonth
             month = datetime(year_index, month_index, 1).strftime("%B")
             self.startTimeEpoch = int((
-                                          datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(hours=3)).timestamp()) * 1000
+                                          datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+                                              hours=3)).timestamp()) * 1000
             self.endTimeEpoch = int((
-                                        datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(hours=3)).timestamp()) * 1000
+                                        datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
+                                            hours=3)).timestamp()) * 1000
             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
                 month, 1, year_index, month, self.endingDay, year_index))
             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
@@ -742,25 +757,28 @@ class controller:
         serious_categories = {}
         for year, monthlymetrics in yearlymetrics.items():
             for month, metrics in monthlymetrics.items():
-                # try:
-                cumulative_total_counts += metrics['total_traces']
-                cumulative_serious_total_counts += metrics['serious_traces']
+                try:
+                    cumulative_total_counts += metrics['total_traces']
+                    cumulative_serious_total_counts += metrics['serious_traces']
 
-                metrics['cumulative_total_traces'] = cumulative_total_counts
-                metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
+                    metrics['cumulative_total_traces'] = cumulative_total_counts
+                    metrics['cumulative_serious_traces'] = cumulative_serious_total_counts
 
-                if metrics['serious_category_counts'].__len__() > 0:
-                    monthly_serious_categories = metrics['serious_category_counts']
-                    for category, count in monthly_serious_categories.items():
-                        if category in serious_categories.keys():
-                            serious_categories[category] += count
-                        else:
-                            serious_categories[category] = count
-                else:
-                    pass
-                if printMetrics:
-                    print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
-                          cumulative_serious_total_counts)
+                    if metrics['serious_category_counts'].__len__() > 0:
+                        monthly_serious_categories = metrics['serious_category_counts']
+                        for category, count in monthly_serious_categories.items():
+                            if category in serious_categories.keys():
+                                serious_categories[category] += count
+                            else:
+                                serious_categories[category] = count
+                    else:
+                        pass
+                    if printMetrics:
+                        print(year, month, metrics['total_traces'], cumulative_total_counts, metrics['serious_traces'],
+                              cumulative_serious_total_counts)
+                except Exception as e:
+                    print(e)
+                    continue
         return yearlymetrics, serious_categories
 
     # Get vulnerabilities based on the specified date range
@@ -885,6 +903,10 @@ class controller:
             metrics['serious_category_counts'] = {}
             return metrics
 
+    def applicationMetricsManager(self):
+        applications = self.getApplications()
+        self.writeApplicationMetrics(applications)
+
     # Get application metrics (count of applications)
     def getApplications(self):
         print("\nApplication Metrics")
@@ -897,10 +919,33 @@ class controller:
         try:
             r = requests.get(url=endpoint, headers=self.header)
             applications = json.loads(r.text)
-            print("\t- Number of applications:", applications['applications'].__len__())
+            print("\t- Number of applications:", applications['count'])
             return applications
         except:
             print("ERROR: Unable to retrieve applications")
+
+    def writeApplicationMetrics(self, applications):
+
+        filename = self.outputpath + '/ApplicationTraceBreakdown.csv'
+        filewriter = open(filename, 'w+')
+
+        app_severity_breakdown_header = "Application Name,Critical,High,Medium,Low,Note\n"
+        app_severity_breakdown_lines = [app_severity_breakdown_header]
+
+        for application in applications['applications']:
+            app_severity_breakdown_linetowrite = ""
+            app_severity_breakdown_linetowrite += application['name'] + ','
+            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['criticals']) + ','
+            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['highs']) + ','
+            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['meds']) + ','
+            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['lows']) + ','
+            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['notes']) + '\n'
+            app_severity_breakdown_lines.append(app_severity_breakdown_linetowrite)
+
+        for line in app_severity_breakdown_lines:
+            filewriter.write(line)
+
+        filewriter.close()
 
     def getApplicationLicenseStatus(self, applications):
         app_license_status = {}
@@ -956,6 +1001,6 @@ controller = controller()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
-controller.dateTrendManager()
-# controller.getApplications()
+# controller.dateTrendManager()
+controller.applicationMetricsManager()
 # controller.test()
