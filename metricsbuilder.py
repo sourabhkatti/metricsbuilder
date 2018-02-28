@@ -29,6 +29,18 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
+    ORGANIZATION_ID = "0f767995-4882-4c7c-889f-994d945ff0d5"
+    TEAMSERVER_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
+    API_KEY = "B6Y14MfSBsmLC6k4GxhIlGk297ZuvG9N"
+    SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
+    USERNAME = "sourabh.katti@contrastsecurity.com"
+
+    # ORGANIZATION_ID = "142bb017-de7e-4af7-b5b9-f0782aa6d369"
+    # TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
+    # API_KEY = "vgy5soZn15wnVPHH539pF8F7niofbl4N"
+    # SERVICE_KEY = "4K5V00T6JB90KPAD"
+    # USERNAME = "danielan@us.ibm.com"
+
     header = {}
 
     FOUND_DATE = "FIRST"
@@ -309,7 +321,7 @@ class controller:
                 print(linetowrite)
                 servernumber += 1
 
-    def getUsersInGroups(self):
+    def getUsersInGroups(self, applications=None):
         endpoint = "/groups?expand=users,applications,skip_links&offset=0&q=&quickFilter=ALL&sort=name"
         url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint
 
@@ -327,6 +339,7 @@ class controller:
         if jsonreader['success'] is True:
 
             # Build up list of all group IDs
+            print("Build up list of all group IDs")
             group_ids = []
             for custom_group in jsonreader['custom_groups']['groups']:
                 group_ids.append(custom_group['group_id'])
@@ -335,26 +348,59 @@ class controller:
 
             # Loop through all groups and get users in each group
             endpoint = "/groups/"
-
+            lineheader = "Group Name, Email Address"
+            print("Looping through groups")
             for group_id in group_ids:
                 url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint + str(group_id)
 
                 response = requests.get(url=url, headers=header, stream=True)
                 jsonreader = json.loads(response.text)
 
-                linetowrite = "\n" + jsonreader['group']['name'] + "\n"
-                filewriter.write(linetowrite)
-                print("\n" + jsonreader['group']['name'])
+                if applications is None:
+                    linetowrite = "\n" + jsonreader['group']['name'] + "\n"
+                    filewriter.write(linetowrite)
+                    print("\n" + jsonreader['group']['name'])
 
-                try:
-                    for user in jsonreader['group']['users']:
-                        linetowrite = ("\t" + user['uid'] + "\n")
-                        print(("\t" + user['uid']))
-                        filewriter.write(linetowrite)
+                    try:
+                        for user in jsonreader['group']['users']:
+                            linetowrite = ("\t" + user['uid'] + "\n")
+                            print(("\t" + user['uid']))
+                            filewriter.write(linetowrite)
 
-                except Exception as e:
-                    print(e)
-                    continue
+                    except Exception as e:
+                        print(e)
+                        continue
+                else:
+                    application_username_filename = self.outputpath + "/UsersAssociatedToApplications.csv"
+                    application_username_filewriter = open(application_username_filename, 'w+')
+                    applications_in_group = jsonreader['group']['applications']
+
+                    if jsonreader['group']['users'].__len__() > 0:
+                        if applications_in_group is not None:
+                            for application in applications['applications']:
+                                # print(application['name'])
+                                linetowrite = ""
+
+                                if applications_in_group.__len__() > 0:
+                                    for application_in_group in applications_in_group[0]['applications']:
+                                        if application['name'] == application_in_group['name']:
+                                            linetowrite = application['name'] + ','
+                                            for user in jsonreader['group']['users']:
+                                                linetowrite += user['uid'] + ','
+                                            linetowrite += "\n"
+                                            print(linetowrite)
+                                            application_username_filewriter.write(linetowrite)
+                                else:
+                                    linetowrite = application['name'] + ','
+                                    for user in jsonreader['group']['users']:
+                                        linetowrite += user['uid'] + ','
+                                    linetowrite += "\n"
+                                    print(linetowrite)
+                                    application_username_filewriter.write(linetowrite)
+
+
+
+            application_username_filewriter.close()
 
     def getPercentUsersLoggedIn(self, days):
         endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
@@ -899,7 +945,8 @@ class controller:
 
     def applicationMetricsManager(self):
         applications = self.getApplications()
-        self.writeApplicationMetrics(applications)
+        # self.writeApplicationMetrics(applications)
+        self.getUsersInGroups(applications=applications)
 
     # Get application metrics (count of applications)
     def getApplications(self):
@@ -912,9 +959,39 @@ class controller:
                                                                 "=ALL&sort=appName"
         try:
             r = requests.get(url=endpoint, headers=self.header)
-            applications = json.loads(r.text)
-            print("\t- Number of applications:", applications['count'])
-            return applications
+            if r.status_code == 504:
+                limit = 50
+                offset = 0
+                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/applications/filter?expand=scores,license," \
+                                                                        "trace_breakdown,compliance_policy," \
+                                                                        "production_protected," \
+                                                                        "skip_links&filterText=&includeArchived=false" \
+                                                                        "&includeMerged=true&limit=50&quickFilter" \
+                                                                        "=ALL&sort=appName"
+                r = requests.get(url=endpoint, headers=self.header)
+                applications = json.loads(r.text)
+                app_count = applications['count']
+                print("\t- Number of applications:", app_count)
+
+                for offset in range(limit, app_count, limit):
+                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + (
+                        "/applications/filter?expand=scores,license," \
+                        "trace_breakdown,compliance_policy," \
+                        "production_protected," \
+                        "skip_links&filterText=&includeArchived=false" \
+                        "&includeMerged=true&limit=%d&offset=%d"
+                        "&quickFilter" \
+                        "=ALL&sort=appName" % (limit, offset))
+                    r = requests.get(url=endpoint, headers=self.header)
+                    next_applications = json.loads(r.text)
+                    for application in next_applications['applications']:
+                        applications['applications'].append(application)
+                    print("\t\tApplications picked up: ", offset)
+                return applications
+            else:
+                applications = json.loads(r.text)
+                print("\t- Number of applications:", applications['count'])
+                return applications
         except:
             print("ERROR: Unable to retrieve applications")
 
@@ -952,6 +1029,7 @@ class controller:
         return app_license_status
 
     def getApplicationsWithNoTag(self):
+        # Text to search tags with
         search_text = "BU:"
         endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
         url = self.TEAMSERVER_URL + endpoint
@@ -995,6 +1073,6 @@ controller = controller()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
-controller.dateTrendManager()
+# controller.dateTrendManager()
 controller.applicationMetricsManager()
 # controller.test()
