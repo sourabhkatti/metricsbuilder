@@ -37,15 +37,15 @@ class controller:
     application_licensed_status = {}
 
     # Starting date: January 1, 2018
-    startingMonth = 9
+    startingMonth = 10
     startingDay = 1
     startingYear = 2017
     startingHour = 21
 
     # Ending date: February 10, 2018
-    endingMonth = 9
-    endingDay = 30
-    endingYear = 2017
+    endingMonth = 2
+    endingDay = 28
+    endingYear = 2018
     endingHour = 21
 
     endTimeEpoch = 0
@@ -56,6 +56,16 @@ class controller:
 
         parser.add_argument("-o", help='Specify the path to write text files to', nargs=1,
                             type=str, metavar="")
+        parser.add_argument("-i", help='Specify the organization ID', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-t", help='Specify the teamserver URL', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-a", help='Specify the API Key', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-s", help='Specify the Service Key', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-u", help='Specify the Username', nargs=1,
+                            type=str, metavar="")
 
         argt = parser.parse_args()
         if argt.o:
@@ -63,6 +73,21 @@ class controller:
         else:
             self.outputpath = os.getcwd()
         print("Writing output to", self.outputpath)
+        if argt.i:
+            self.ORGANIZATION_ID = argt.i[0]
+        print("Organization ID: ", self.ORGANIZATION_ID)
+        if argt.t:
+            self.TEAMSERVER_URL = argt.t[0]
+        print("Teamserver URL: ", self.TEAMSERVER_URL)
+        if argt.a:
+            self.API_KEY = argt.a[0]
+        print("API Key: ", self.API_KEY)
+        if argt.s:
+           self.SERVICE_KEY = argt.s[0]
+        print("Service Key: ", self.SERVICE_KEY)
+        if argt.u:
+            self.USERNAME = argt.u[0]
+        print("Username: ", self.USERNAME)
 
         self.AUTHORIZATION = base64.b64encode((self.USERNAME + ':' + self.SERVICE_KEY).encode('utf-8'))
         self.header = {
@@ -851,9 +876,42 @@ class controller:
         try:
             # Get all vulns which need an issue opened for them
             r = requests.get(url=endpoint, headers=self.header)
-            vulns = json.loads(r.text)
-            print(".... Done!")
-            return self.getVulnMetrics(vulns['traces'])
+
+            if r.status_code == 504:
+                limit = 100
+                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                        "/filter/?endDate=" + str(
+                    self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                         "skip_links&quickFilter=" + self.SORTING + "&limit=100&sort=-lastTimeSeen&startDate=" + str(
+                    self.startTimeEpoch) + \
+                           "&timestampFilter=" + self.FOUND_DATE
+
+                r = requests.get(url=endpoint, headers=self.header)
+                vulns = json.loads(r.text)
+                vuln_count = vulns['count']
+                print("\t- Number of vulns:", vuln_count)
+
+                for offset in range(limit, vuln_count, limit):
+
+                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                            "/filter/?endDate=" + str(
+                        self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                             "skip_links&quickFilter=" + self.SORTING + ("&limit=%d&offset=%d" % (limit, offset)) + "&sort=-lastTimeSeen&startDate=" + str(
+                        self.startTimeEpoch) + \
+                               "&timestampFilter=" + self.FOUND_DATE
+
+                    r = requests.get(url=endpoint, headers=self.header)
+                    next_vulns = json.loads(r.text)
+                    for vuln in next_vulns['traces']:
+                        vulns['traces'].append(vuln)
+                    print("\t\tVulns picked up: ", offset)
+                return self.getVulnMetrics(vulns['traces'])
+            else:
+
+                vulns = json.loads(r.text)
+                print(".... Done!")
+                return self.getVulnMetrics(vulns['traces'])
+
         except Exception as e:
             print("ERROR: Unable to connect to teamserver. Please check your authentication details.")
             print(e)
@@ -1089,6 +1147,6 @@ controller = controller()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
-# controller.dateTrendManager()
+controller.dateTrendManager()
 controller.getUsersInTaggedApplications()
 # controller.test()
