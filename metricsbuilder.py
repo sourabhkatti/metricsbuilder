@@ -870,12 +870,13 @@ class controller:
         # serious_category_counts = Total number of serious categories and the number of vulns found in each one
         # changed_status = Number of vulns with a status other than Reported
         # remediated_status = Number of vulns with a status of Remediated, Not a Problem or Fixed
-        metrics = {}
-        metrics['serious_traces'] = 0
-        metrics['changed_status'] = 0
-        metrics['remediated_status'] = 0
-        metrics['serious_category_counts'] = {}
-        metrics['total_traces'] = 0
+        metrics = {
+            'serious_traces': 0,
+            'changed_status': 0,
+            'remediated_status': 0,
+            'serious_category_counts': {},
+            'total_traces': 0
+        }
 
         if traceNum > 0:
             print("\tTotal number of traces: %d" % traceNum)
