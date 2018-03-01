@@ -29,18 +29,6 @@ class controller:
     # SERVICE_KEY = ""
     # USERNAME = ""
 
-    ORGANIZATION_ID = "0f767995-4882-4c7c-889f-994d945ff0d5"
-    TEAMSERVER_URL = "https://apptwo.contrastsecurity.com/Contrast/api/ng/"
-    API_KEY = "B6Y14MfSBsmLC6k4GxhIlGk297ZuvG9N"
-    SERVICE_KEY = "ZAXHB4LTKMH25NQ1"
-    USERNAME = "sourabh.katti@contrastsecurity.com"
-
-    # ORGANIZATION_ID = "142bb017-de7e-4af7-b5b9-f0782aa6d369"
-    # TEAMSERVER_URL = "https://app.contrastsecurity.com/Contrast/api/ng/"
-    # API_KEY = "vgy5soZn15wnVPHH539pF8F7niofbl4N"
-    # SERVICE_KEY = "4K5V00T6JB90KPAD"
-    # USERNAME = "danielan@us.ibm.com"
-
     header = {}
 
     FOUND_DATE = "FIRST"
@@ -331,76 +319,97 @@ class controller:
         }
 
         response = requests.get(url=url, headers=header, stream=True)
-        jsonreader = json.loads(response.text)
+        group = json.loads(response.text)
 
         filename = self.outputpath + "/UsersInGroups.txt"
         filewriter = open(filename, 'w+')
 
-        if jsonreader['success'] is True:
+        if group['success'] is True:
 
             # Build up list of all group IDs
             print("Build up list of all group IDs")
             group_ids = []
-            for custom_group in jsonreader['custom_groups']['groups']:
+            for custom_group in group['custom_groups']['groups']:
                 group_ids.append(custom_group['group_id'])
-            for predefined_group in jsonreader['predefined_groups']['groups']:
+            for predefined_group in group['predefined_groups']['groups']:
                 group_ids.append(predefined_group['group_id'])
 
             # Loop through all groups and get users in each group
             endpoint = "/groups/"
             lineheader = "Group Name, Email Address"
             print("Looping through groups")
-            for group_id in group_ids:
-                url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint + str(group_id)
+            group_apps_users = {}
 
-                response = requests.get(url=url, headers=header, stream=True)
-                jsonreader = json.loads(response.text)
-
-                if applications is None:
-                    linetowrite = "\n" + jsonreader['group']['name'] + "\n"
+            if applications is None:
+                for group_id in group_ids:
+                    linetowrite = "\n" + group['name'] + "\n"
                     filewriter.write(linetowrite)
-                    print("\n" + jsonreader['group']['name'])
-
+                    print("\n" + group['name'])
                     try:
-                        for user in jsonreader['group']['users']:
+                        for user in group['users']:
                             linetowrite = ("\t" + user['uid'] + "\n")
                             print(("\t" + user['uid']))
                             filewriter.write(linetowrite)
-
+                            return
                     except Exception as e:
                         print(e)
                         continue
-                else:
-                    application_username_filename = self.outputpath + "/UsersAssociatedToApplications.csv"
-                    application_username_filewriter = open(application_username_filename, 'w+')
-                    applications_in_group = jsonreader['group']['applications']
+            else:
+                for group_id in group_ids:
+                    url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint + str(group_id)
 
-                    if jsonreader['group']['users'].__len__() > 0:
-                        if applications_in_group is not None:
-                            for application in applications['applications']:
-                                # print(application['name'])
-                                linetowrite = ""
+                    response = requests.get(url=url, headers=header, stream=True)
+                    group = json.loads(response.text)['group']
 
-                                if applications_in_group.__len__() > 0:
-                                    for application_in_group in applications_in_group[0]['applications']:
-                                        if application['name'] == application_in_group['name']:
-                                            linetowrite = application['name'] + ','
-                                            for user in jsonreader['group']['users']:
-                                                linetowrite += user['uid'] + ','
-                                            linetowrite += "\n"
-                                            print(linetowrite)
-                                            application_username_filewriter.write(linetowrite)
+                    try:
+                        users = []
+                        applications_in_group = []
+                        for user in group['users']:
+                            users.append(user['uid'])
+                        if group['applications'] is None:
+                            applications_in_group = None
+                        else:
+                            for application_in_group in group['applications']:
+                                for app in application_in_group['applications']:
+                                    applications_in_group.append(app['name'])
+                        group_apps_users[group['name']] = {'users': users, 'apps': applications_in_group}
+                    except Exception as e:
+                        print(e)
+                print(group_apps_users)
+                app_user_mappings = {}
+                for search_app in applications:
+                    for group, app_user in group_apps_users.items():
+                        app_user_mapping = ""
+                        apps = app_user['apps']
+                        users = app_user['users']
+                        if apps is None:
+                            # app_user_mapping += search_app + "-(ALL),"
+                            for user in users:
+                                app_user_mapping += user + ','
+                            if search_app in app_user_mappings.keys():
+                                appname_without_comma = search_app.replace(",", "-")
+                                app_user_mappings[appname_without_comma] += app_user_mapping
+                            else:
+                                appname_without_comma = search_app.replace(",", "-")
+                                app_user_mappings[appname_without_comma] = app_user_mapping
+                        else:
+                            if search_app in apps:
+                                # app_user_mapping += search_app + ','
+                                for user in users:
+                                    app_user_mapping += user + ','
+                                if search_app in app_user_mappings.keys():
+                                    appname_without_comma = search_app.replace(",", "-")
+                                    app_user_mappings[appname_without_comma] += app_user_mapping
                                 else:
-                                    linetowrite = application['name'] + ','
-                                    for user in jsonreader['group']['users']:
-                                        linetowrite += user['uid'] + ','
-                                    linetowrite += "\n"
-                                    print(linetowrite)
-                                    application_username_filewriter.write(linetowrite)
-
-
-
-            application_username_filewriter.close()
+                                    appname_without_comma = search_app.replace(",", "-")
+                                    app_user_mappings[appname_without_comma] = app_user_mapping
+                print(app_user_mappings)
+                app_user_file = self.outputpath + "/UsersForApp.csv"
+                app_user_filewriter = open(app_user_file, 'w+')
+                for app_name, users in app_user_mappings.items():
+                    linetowrite = app_name + ',' + users + '\n'
+                    app_user_filewriter.write(linetowrite)
+                app_user_filewriter.close()
 
     def getPercentUsersLoggedIn(self, days):
         endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
@@ -948,6 +957,10 @@ class controller:
         # self.writeApplicationMetrics(applications)
         self.getUsersInGroups(applications=applications)
 
+    def getUsersInTaggedApplications(self):
+        untagged_applications = self.getApplicationsWithNoTag()
+        self.getUsersInGroups(applications=untagged_applications)
+
     # Get application metrics (count of applications)
     def getApplications(self):
         print("\nApplication Metrics")
@@ -1042,6 +1055,7 @@ class controller:
 
         applications = jsonreader['applications']
         app_count = 0
+        untagged_applications = []
         for application in applications:
             tagged = False
             tags = application['tags']
@@ -1056,7 +1070,8 @@ class controller:
             if not tagged:
                 app_count += 1
                 print(str(app_count) + ". " + application['name'])
-                # filewriter.close()
+                untagged_applications.append(application['name'])
+        return untagged_applications
 
     def test(self):
         a = datetime(2017, 12, 1, 0, 0, 0, 0)
@@ -1074,5 +1089,5 @@ controller = controller()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
 # controller.dateTrendManager()
-controller.applicationMetricsManager()
+controller.getUsersInTaggedApplications()
 # controller.test()
