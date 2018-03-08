@@ -18,13 +18,13 @@ There are functions at the bottom of the script that can be commented out for va
  vulnerabilities over time (dateTrendManager),
  etc...
 
-# controller.getServersWithNoApplications()
-# controller.getUsersNotLoggedInDays(days=30)
-# controller.getApplicationsWithNoGroup()
-# controller.getNeverLoggedInUsers()
-# controller.getOfflineServers()
-# controller.getUsersInGroups()
-# controller.metricsbuilder(days=90)
-#controller.dateTrendManager()
-#controller.getUsersInTaggedApplications()
-controller.applicationMetricsManager()
+    # controller.getServersWithNoApplications()
+    # controller.getUsersNotLoggedInDays(days=30)
+    # controller.getApplicationsWithNoGroup()
+    # controller.getNeverLoggedInUsers()
+    # controller.getOfflineServers()
+    # controller.getUsersInGroups()
+    # controller.metricsbuilder(days=90)
+    # controller.dateTrendManager()
+    # controller.getUsersInTaggedApplications()
+    # controller.applicationMetricsManager()
