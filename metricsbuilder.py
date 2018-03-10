@@ -18,38 +18,32 @@ from datetime import datetime, timedelta
 
 
 class controller:
-    ##################################################
-    # Replace the below fields with your own details #
-    ##################################################
+    ####################################################################
+    #  Location of properties with connection details to the Contrast UI
+    teamserver_config_file = "script.properties"
 
-
-    # ORGANIZATION_ID = ""
-    # TEAMSERVER_URL = ""
-    # API_KEY = ""
-    # SERVICE_KEY = ""
-    # USERNAME = ""
-
-    header = {}
-
+    ####################################################################
+    # Specify date range to retrieve vulnerability trending metrics for
     FOUND_DATE = "FIRST"
     SORTING = "ALL"
     LICENSED_ONLY = False
     application_licensed_status = {}
 
-    # Starting date: January 1, 2018
-    startingMonth = 9
+    # Starting date
+    startingMonth = 1
     startingDay = 1
-    startingYear = 2017
-    startingHour = 21
+    startingYear = 2018
 
-    # Ending date: February 10, 2018
-    endingMonth = 9
-    endingDay = 30
-    endingYear = 2017
-    endingHour = 21
+    # Ending date
+    endingMonth = 2
+    endingDay = 28
+    endingYear = 2018
 
+    ####################################################################
+    # DO NOT CONFIGURE
     endTimeEpoch = 0
     startTimeEpoch = 0
+    header = {}
 
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
@@ -63,6 +57,26 @@ class controller:
         else:
             self.outputpath = os.getcwd()
         print("Writing output to", self.outputpath)
+        self.getTeamserverConnection()
+
+    def getTeamserverConnection(self):
+        """
+        Open properties file and set the Contrast UI connection details
+        """
+
+        f = open(self.teamserver_config_file, 'r')
+        for property in f.readlines():
+            key, value = property.split("=")
+            if key.find("username") is not -1:
+                self.USERNAME = value
+            if key.find("organization.id") is not -1:
+                self.ORGANIZATION_ID = value
+            if key.find("apikey") is not -1:
+                self.API_KEY = value
+            if key.find("servicekey") is not -1:
+                self.SERVICE_KEY = value
+            if key.find("teamserver.url") is not -1:
+                self.TEAMSERVER_URL = value
 
         self.AUTHORIZATION = base64.b64encode((self.USERNAME + ':' + self.SERVICE_KEY).encode('utf-8'))
         self.header = {
@@ -71,6 +85,10 @@ class controller:
         }
 
     def getOfflineServers(self):
+        """
+        Output a list of all servers which are currently offline
+        """
+
         endpoint = self.ORGANIZATION_ID + "/servers/filter?expand=applications,server_license," \
                                           "skip_links&includeArchived=false&offset=0&quickFilter=OFFLINE" \
                                           "&sort=-lastActivity"
@@ -91,7 +109,7 @@ class controller:
 
         # Loop through each server and determine if it is offline
         if jsonreader["success"] is True:
-            todaydate = datetime.datetime.today()
+            todaydate = datetime.today()
             servernum = 1
             print("The following servers are offline as of %s:" % todaydate)
             filewriter.write("The following servers are offline as of %s:\n" % todaydate)
@@ -104,6 +122,10 @@ class controller:
         filewriter.close()
 
     def getNeverLoggedInUsers(self):
+        """
+        Output a list of all users who have never logged into the Contrast UI
+        """
+
         endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
                                           "skip_links&offset=0&q=&quickFilter=ALL&sort=name"
         url = self.TEAMSERVER_URL + endpoint
@@ -139,8 +161,13 @@ class controller:
         filewriter.close()
 
     def getUsersNotLoggedInDays(self, days):
-        # returns all users who have not logged in during the last "days" number of days
-        # Fail the command if the number of days is not positive
+        """
+        Returns all users who have not logged in during the last "days" number of days
+        Fail the command if the number of days is not positive
+
+        :param days: number of days to check user login status for
+        """
+
         if days < -1:
             print("\n* * The number of days must be greater than 0")
 
@@ -152,7 +179,7 @@ class controller:
                 "API-Key": self.API_KEY,
                 "Authorization": self.AUTHORIZATION,
             }
-            # 18
+
             # Send the request and get its response
             response = requests.get(url=url, headers=header, stream=True)
             jsonreader = json.loads(response.text)
@@ -171,14 +198,14 @@ class controller:
                 for user in jsonreader["users"]:
                     try:
                         # Get the user's last login time and convert it to a string
-                        lastlogintime = datetime.datetime.fromtimestamp(
+                        lastlogintime = datetime.fromtimestamp(
                             user['login']['last_login_time'] / 1000.0).strftime(
                             '%Y-%m-%d')
 
                         # Parse out month, day and year and find the difference between today and that date
                         year, month, day = lastlogintime.split("-")
-                        dt_lastlogintime = datetime.datetime(int(year), int(month), int(day))
-                        todaydate = datetime.datetime.today()
+                        dt_lastlogintime = datetime(int(year), int(month), int(day))
+                        todaydate = datetime.today()
                         date_diff = (todaydate - dt_lastlogintime).days
 
                         # If difference between dates is greater than the one specified, add it to our output
@@ -194,6 +221,10 @@ class controller:
             filewriter.close()
 
     def getApplicationsWithNoGroup(self):
+        """
+        Output a list of all applications which do not have a group
+        """
+
         endpoint = self.ORGANIZATION_ID + "/groups"
         url = self.TEAMSERVER_URL + endpoint
 
@@ -261,8 +292,6 @@ class controller:
                     if application['app_id'] not in registered_application_ids:
                         missing_app_ids[application['app_id']] = application['name']
 
-                # print(missing_app_ids.__len__(), missing_app_ids)
-
                 # Loop through all missing applications and output it to the text file
                 print("\nThe following applications are not included in a group:")
                 filewriter.write("The following applications are not included in a group:\n")
@@ -281,6 +310,10 @@ class controller:
         filewriter.close()
 
     def getServersWithNoApplications(self):
+        """
+        Output a list of all servers which don't have any applications associated with it
+        """
+
         # The endpoint automatically returns all servers with no applications
         endpoint = self.ORGANIZATION_ID + '/servers/filter?applicationsIds=None'
         url = self.TEAMSERVER_URL + endpoint
@@ -310,6 +343,10 @@ class controller:
                 servernumber += 1
 
     def getUsersInGroups(self, applications=None):
+        """
+        Output a list of all users in each group
+        :param applications: if specified, output a list of all users associated with each application.
+        """
         endpoint = "/groups?expand=users,applications,skip_links&offset=0&q=&quickFilter=ALL&sort=name"
         url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint
 
@@ -318,11 +355,17 @@ class controller:
             "Authorization": self.AUTHORIZATION,
         }
 
+        # Send API request
         response = requests.get(url=url, headers=header, stream=True)
         group = json.loads(response.text)
 
-        filename = self.outputpath + "/UsersInGroups.txt"
-        filewriter = open(filename, 'w+')
+        # Specify output file based on whether a list of applications is provided
+        if applications is None:
+            filename = self.outputpath + "/UsersInGroups.txt"
+            filewriter = open(filename, 'w+')
+        else:
+            app_user_file = self.outputpath + "/UsersForApp.csv"
+            app_user_filewriter = open(app_user_file, 'w+')
 
         if group['success'] is True:
 
@@ -338,7 +381,9 @@ class controller:
             endpoint = "/groups/"
             lineheader = "Group Name, Email Address"
             print("Looping through groups")
-            group_apps_users = {}
+
+
+
 
             if applications is None:
                 for group_id in group_ids:
@@ -355,33 +400,46 @@ class controller:
                         print(e)
                         continue
             else:
+                # Master dictionary of mappings between applications and users
+                group_apps_users = {}
+
                 for group_id in group_ids:
+                    # Reach out to the group's endpoint and get a list of all applications and users
                     url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint + str(group_id)
 
+                    # Send request
                     response = requests.get(url=url, headers=header, stream=True)
                     group = json.loads(response.text)['group']
 
                     try:
                         users = []
                         applications_in_group = []
+                        # Get all users in the group
                         for user in group['users']:
                             users.append(user['uid'])
+
+                        # Get all applications in the group. If None, the group has access to ALL applications
                         if group['applications'] is None:
                             applications_in_group = None
                         else:
                             for application_in_group in group['applications']:
                                 for app in application_in_group['applications']:
                                     applications_in_group.append(app['name'])
+
+                        # Add users and applications to the master mapping dictionary
                         group_apps_users[group['name']] = {'users': users, 'apps': applications_in_group}
                     except Exception as e:
                         print(e)
-                print(group_apps_users)
+
+                # Generate the spreadsheet of application <=> user mapping
                 app_user_mappings = {}
                 for search_app in applications:
                     for group, app_user in group_apps_users.items():
                         app_user_mapping = ""
                         apps = app_user['apps']
                         users = app_user['users']
+
+                        # If ALL applications, add this application to every user
                         if apps is None:
                             # app_user_mapping += search_app + "-(ALL),"
                             for user in users:
@@ -393,6 +451,7 @@ class controller:
                                 appname_without_comma = search_app.replace(",", "-")
                                 app_user_mappings[appname_without_comma] = app_user_mapping
                         else:
+                            # Determine if the current user has access to one of the apps in the specified app list
                             if search_app in apps:
                                 # app_user_mapping += search_app + ','
                                 for user in users:
@@ -404,14 +463,18 @@ class controller:
                                     appname_without_comma = search_app.replace(",", "-")
                                     app_user_mappings[appname_without_comma] = app_user_mapping
                 print(app_user_mappings)
-                app_user_file = self.outputpath + "/UsersForApp.csv"
-                app_user_filewriter = open(app_user_file, 'w+')
+
+                # Generate csv of user and app mappings
                 for app_name, users in app_user_mappings.items():
                     linetowrite = app_name + ',' + users + '\n'
                     app_user_filewriter.write(linetowrite)
                 app_user_filewriter.close()
 
     def getPercentUsersLoggedIn(self, days):
+        """
+        Determine percent of users who have not logged into the teamserver in the specified number of days
+        :param days: number of days to check login status for
+        """
         endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
                                           "skip_links&offset=0&q=&quickFilter=ALL&sort=name"
         url = self.TEAMSERVER_URL + endpoint
@@ -435,17 +498,17 @@ class controller:
             for user in jsonreader["users"]:
                 try:
                     # Get the user's last login time and convert it to a string
-                    lastlogintime = datetime.datetime.fromtimestamp(
+                    lastlogintime = datetime.fromtimestamp(
                         user['login']['last_login_time'] / 1000.0).strftime(
                         '%Y-%m-%d')
 
                     # Parse out month, day and year and find the difference between today and that date
                     year, month, day = lastlogintime.split("-")
-                    dt_lastlogintime = datetime.datetime(int(year), int(month), int(day))
-                    todaydate = datetime.datetime.today()
+                    dt_lastlogintime = datetime(int(year), int(month), int(day))
+                    todaydate = datetime.today()
                     date_diff = (todaydate - dt_lastlogintime).days
 
-                    earlier_date = (datetime.datetime.today() - datetime.timedelta(days)).strftime("%Y-%m-%d")
+                    earlier_date = (datetime.today() - timedelta(days)).strftime("%Y-%m-%d")
                     todaydate_formatted = todaydate.strftime("%Y-%m-%d")
 
                     # If difference between dates is greater than the one specified, add it to our output
@@ -459,13 +522,22 @@ class controller:
             print(str(login_percentage) + "% of users have logged into teamserver the past " + str(days) + " days.\n")
 
     def parseAuditLog(self, days):
+        """
+        Parse the audit log and output a csv of some of the actions. The actions which will be logged are:
+        - date
+        - action: trace_status_changed, trace_deleted, agent_downloaded, license_applied
+        - username
+        - message
+        :param days: Number of days to pull the audit log details for
+        """
 
         # Setup file to output the text to
         filestring = "/usage_metrics.csv"
         filename = self.outputpath + filestring
         filewriter = open(filename, 'w+')
 
-        earlier_date = (datetime.datetime.today() - datetime.timedelta(days)).strftime("%Y-%m-%d")
+        # Generate epoch timestamp of earlier date
+        earlier_date = (datetime.today() - timedelta(days)).strftime("%Y-%m-%d")
         endpoint = self.ORGANIZATION_ID + "/security/audit?expand=skip_links&limit=1000000&startDate=%s" % earlier_date
 
         url = self.TEAMSERVER_URL + endpoint
@@ -473,11 +545,12 @@ class controller:
             "API-Key": self.API_KEY,
             "Authorization": self.AUTHORIZATION,
         }
-        # 18
+
         # Send the request and get its response
         response = requests.get(url=url, headers=header, stream=True)
         jsonreader = json.loads(response.text)
 
+        # Initialize keyword and counters for each action
         trace_status_change_counter = 0
         trace_num = 0
 
@@ -496,18 +569,21 @@ class controller:
         license_applied_keyword = "license_applied"
 
         print("Total number of lines: ", jsonreader['logs'].__len__())
+
+        # Setup headers for csv to output
         filewriter.write("date,action,username,message\n")
         for log in jsonreader['logs']:
             log_message = log['message']
 
+            # Get epoch timestamp of audit message
             epoch_timestamp = log['date']
-            timestamp = datetime.datetime.fromtimestamp(epoch_timestamp / 1000.0).strftime('%Y-%m-%d')
+            timestamp = datetime.fromtimestamp(epoch_timestamp / 1000.0).strftime('%Y-%m-%d')
             username = ""
             message = ""
             keyword = ""
-
             line = ""
 
+            # Check if audit message is for a trace status change, increment counter if so
             trace_status_matcher = re.compile(
                 '([\w\.]+@[\w\.]+com)\smarked status to (\w+).+\s[for traces\(\)]+([\w\d\-\,]+)')
             trace_status_matches = trace_status_matcher.findall(log_message)
@@ -518,6 +594,7 @@ class controller:
                 trace_status_change_counter += 1
                 trace_num = trace_status_matches[0][2].count(",") + 1
 
+            # Check if audit message is for a deleted trace, increment counter if so
             elif log_message.__contains__("deleted trace"):
                 trace_deleted_matcher = re.compile("User\s([\.\@\w]+)\sdeleted\strace\s([A-Z0-9\-]+)")
                 matches = trace_deleted_matcher.findall(log_message)
@@ -529,6 +606,8 @@ class controller:
                     message = "na"
                 keyword = trace_deleted_keyword
                 trace_deleted_counter += 1
+
+            # Check if audit message is for a report generation, increment counter if so
             elif log_message.__contains__("report"):
                 report_downloaded_matcher = re.compile("User\s([\.\@\w]+)\screated a new report")
                 matches = report_downloaded_matcher.findall(log_message)
@@ -539,6 +618,8 @@ class controller:
                 message = "report generated"
                 keyword = report_usage_keyword
                 report_usage_counter += 1
+
+            # Check if audit message is for an agent download, increment counter if so
             elif log_message.__contains__("downloaded") and not log_message.__contains__("agent_"):
                 agent_download_matcher = re.compile('User\s([\w\@\.]+com)[downloaded\s]+([\w\s\_\.]+)[a|A]gent')
                 keyword = agent_downloaded_keyword
@@ -553,9 +634,9 @@ class controller:
                     message = "na"
                     username = "na"
                 agent_downloaded_counter += 1
+
+            # Check if audit message is for a license applied, increment counter if so
             elif log_message.__contains__("License"):
-                # license_applied_matcher = re.compile("Enterprise License[\s\w\:]+\'([\w\s\\\'\:]+)\'[\sby]+(.+)")
-                # license_applied_matcher = re.compile("Enterprise License applied to application:[\s\\\']+(.+)[\\\'\s]+by\s(.+)")
                 license_applied_matcher = re.compile(
                     "Enterprise License applied to application:[\s\\\']+(.+)\'[\\\'\s]+by\s(.+)")
                 license_applied_matches = license_applied_matcher.findall(log_message)
@@ -568,6 +649,7 @@ class controller:
                     message = "na"
                 license_applied_counter += 1
 
+            # Write line to csv
             try:
                 if username is not "":
                     if keyword is "trace_status_change":
@@ -588,9 +670,15 @@ class controller:
 
         filewriter.close()
 
-    def metricsbuilder(self, days):
+    def UsageMetrics(self, days):
 
         # Fail the command if the number of days is not positive
+        """
+        Get metrics related to usage of the Contrast UI.
+        - Percent of users who have logged in within X days
+        - Parse audit log to determine actions taken in the Contrast UI
+        :param days:
+        """
         if days < -1:
             print("\n* * The number of days must be greater than 0")
 
@@ -598,8 +686,10 @@ class controller:
             self.getPercentUsersLoggedIn(days)
             self.parseAuditLog(days)
 
-    # Get date range for the vulnerabilities to pull from teamserver
     def getDateRange(self):
+        """
+        Get date range from user if not specified in properties at the top of the script
+        """
         if self.startingMonth is 0:
             print("Please specify the date range to pull vulnerability information.")
             self.startingMonth = int(input("\tStarting month number (1-12): "))
@@ -625,8 +715,34 @@ class controller:
                 print("The day should be between 1 and 31!")
                 self.endingDay = int(input("\tEnding day (1-31): "))
 
-    # Manage how vulnerabilities are associated with time
+    def VulnerabilityTrendMetrics(self, printMetrics=True):
+        # Get vulnerabilities per month for date range specified
+        """
+        Generate and output a csv of trending metrics for vulnerabilities in the Contrast UI.
+        Date range is taken from properties defined at the top of the script.
+        By default, it will query for ALL vulnerabilities (Open and Closed) and sort by the First Found date (as
+            opposed to the Last Found date).
+        Metrics are grouped by the month they were found in.
+
+        - "Serious" vulnerabilities = vulnerabilities marked as Critical and High
+        """
+        yearlyMetrics = self.dateTrendManager(printMetrics=printMetrics)
+
+        # Generate cumulative counts for all retrieved vulnerabilities
+        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics,
+                                                                                 printMetrics=printMetrics)
+        if printMetrics:
+            print(cumulative_yearly_metrics)
+
+        # Output the cumulative metrics to a file
+        self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories, printMetrics)
+
     def dateTrendManager(self, printMetrics=True):
+        """
+        Manages how vulnerabilities are associated with the time they were found
+        :param printMetrics:
+        :return:
+        """
 
         # Get the months and days we'll be looking through
         self.getDateRange()
@@ -636,6 +752,8 @@ class controller:
         # Loop through all years
         year_index = self.startingYear
 
+        # Check if metrics should be pulled for licensed applications only.
+        # If true, generate a list of licensed application IDs
         if self.LICENSED_ONLY:
             applications = self.getApplications()
             self.application_licensed_status = self.getApplicationLicenseStatus(applications)
@@ -727,11 +845,7 @@ class controller:
                 month, 1, year_index, month, self.endingDay, year_index))
             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
             yearlyMetrics[year_index] = monthlyMetrics
-
-        cumulative_yearly_metrics, serious_categories = self.getCumulativeCounts(yearlyMetrics,
-                                                                                 printMetrics=printMetrics)
-        # print(cumulative_yearly_metrics)
-        self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories, printMetrics)
+        return yearlyMetrics
 
     def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, printMetrics):
         cumulative_metrics_filename = self.outputpath + "/CumulativeMetrics.csv"
@@ -953,10 +1067,34 @@ class controller:
             metrics['serious_category_counts'] = {}
             return metrics
 
-    def applicationMetricsManager(self):
+    def ApplicationMetrics(self):
+        """
+        Generate metrics for all applications in the teamserver.
+        The following metrics will be logged in the csv.
+        - Application name
+        - # of Critical vulns
+        - # of High Medium vulns
+        - # of Medium vulns
+        - # of Low vulns
+        - # of Note vulns
+        - # of vulns in a Reported status
+        - # of vulns in a Suspicious status
+        - # of vulns in a Confirmed status
+        - # of vulns in a Remediated status
+        - # of vulns in a Not a Problem status
+        - # of vulns in a Fixed status
+        - Application grade
+        - First seen date for application
+        - Last seen date for application
+        - License level
+        - Date license was applied
+        """
+
+        # Get all applications
         applications = self.getApplications()
-        # self.writeApplicationMetrics(applications)
-        self.getUsersInGroups(applications=applications)
+
+        # Write metrics to specified log file
+        self.writeApplicationMetrics(applications)
 
     def getUsersInTaggedApplications(self):
         untagged_applications = self.getApplicationsWithNoTag()
@@ -1014,20 +1152,37 @@ class controller:
         filename = self.outputpath + '/ApplicationTraceBreakdown.csv'
         filewriter = open(filename, 'w+')
 
-        app_severity_breakdown_header = "Application Name,Critical,High,Medium,Low,Note\n"
-        app_severity_breakdown_lines = [app_severity_breakdown_header]
+        app_severity_breakdown_header = "Application Name,Critical,High,Medium,Low,Note,Reported,Suspicious,Confirmed,Remediated,Not A Problem,Fixed,Grade,First Seen,Time Last Seen,License Level,Time Licensed\n"
+        app_linetowrite = [app_severity_breakdown_header]
 
         for application in applications['applications']:
             app_severity_breakdown_linetowrite = ""
-            app_severity_breakdown_linetowrite += application['name'] + ','
-            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['criticals']) + ','
-            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['highs']) + ','
-            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['meds']) + ','
-            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['lows']) + ','
-            app_severity_breakdown_linetowrite += str(application['trace_breakdown']['notes']) + '\n'
-            app_severity_breakdown_lines.append(app_severity_breakdown_linetowrite)
+            appname = application['name'].replace(",", "-")
+            app_linetowrite += appname + ','
+            app_linetowrite += str(application['trace_breakdown']['criticals']) + ','
+            app_linetowrite += str(application['trace_breakdown']['highs']) + ','
+            app_linetowrite += str(application['trace_breakdown']['meds']) + ','
+            app_linetowrite += str(application['trace_breakdown']['lows']) + ','
+            app_linetowrite += str(application['trace_breakdown']['notes']) + ','
+            app_linetowrite += str(application['trace_breakdown']['reported']) + ','
+            app_linetowrite += str(application['trace_breakdown']['suspicious']) + ','
+            app_linetowrite += str(application['trace_breakdown']['confirmed']) + ','
+            app_linetowrite += str(application['trace_breakdown']['remediated']) + ','
+            app_linetowrite += str(application['trace_breakdown']['notProblem']) + ','
+            app_linetowrite += str(application['trace_breakdown']['fixed']) + ','
+            app_linetowrite += str(application['scores']['letter_grade']) + ','
+            app_linetowrite += datetime.fromtimestamp(application['created'] / 1000.0).strftime('%Y-%m-%d') + ','
+            app_linetowrite += datetime.fromtimestamp(application['last_seen'] / 1000.0).strftime('%Y-%m-%d') + ','
+            app_linetowrite += str(application['license']['level']) + ','
+            if application['license']['start'] > 0:
+                app_linetowrite += datetime.fromtimestamp(application['license']['start'] / 1000.0).strftime(
+                    '%Y-%m-%d') + ','
+            else:
+                app_linetowrite += '0'
+            app_linetowrite += '\n'
+            app_linetowrite.append(app_severity_breakdown_linetowrite)
 
-        for line in app_severity_breakdown_lines:
+        for line in app_linetowrite:
             filewriter.write(line)
 
         filewriter.close()
@@ -1083,12 +1238,13 @@ class controller:
 
 controller = controller()
 # controller.getServersWithNoApplications()
-# controller.getUsersNotLoggedInDays(days=30)
+# controller.getUsersNotLoggedInDays(days=28)
 # controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-# controller.metricsbuilder(days=90)
-# controller.dateTrendManager()
-controller.getUsersInTaggedApplications()
+controller.UsageMetrics(days=28)
+controller.VulnerabilityTrendMetrics()
+# controller.getUsersInTaggedApplications()
+# controller.applicationMetricsManager()
 # controller.test()
