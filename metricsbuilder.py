@@ -1,11 +1,13 @@
-import os
-import base64
-import json
-import requests
 import argparse
-import re
+import base64
 import calendar
+import csv
+import json
+import os
+import re
 from datetime import datetime, timedelta
+
+import requests
 
 
 # - Offline servers
@@ -33,7 +35,7 @@ class controller:
 
     FOUND_DATE = "FIRST"
     SORTING = "ALL"
-    LICENSED_ONLY = False
+    LICENSED_ONLY = True
     application_licensed_status = {}
 
     # Starting date: January 1, 2018
@@ -1013,7 +1015,7 @@ class controller:
 
     def applicationMetricsManager(self):
         applications = self.getApplications()
-        # self.writeApplicationMetrics(applications)
+        self.writeApplicationMetrics(applications)
         self.getUsersInGroups(applications=applications)
 
     def getUsersInTaggedApplications(self):
@@ -1138,6 +1140,51 @@ class controller:
         print(a)
         print(b)
 
+    # Note this function requires: "pip3 install lxml" prior to generating graphs, also run applicationsMetricsManager() first
+    def generatePPT(self):
+        from pptx import Presentation
+        from pptx.chart.data import ChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.util import Inches
+        prs = Presentation("CBRTemplate.pptx")
+
+        slide = prs.slides.add_slide(prs.slide_layouts[9])
+        title_placeholder = slide.shapes.title
+        title_placeholder.text = 'SERIOUS VULNERABILITIES BY APPLICATION'
+
+        # define chart data ---------------------
+        chart_data = ChartData()
+        categories = []
+        criticals = []
+        highs = []
+        with open('ApplicationTraceBreakdown.csv') as csvDataFile:
+            csvReader = csv.reader(csvDataFile)
+            next(csvReader, None)
+            for row in csvReader:
+                #skip this app is there are no criticals or highs
+                if (row[1] != '0' or row[2] != '0'):
+                    categories.append(row[0])
+                    criticals.append(row[1])
+                    highs.append(row[2])
+
+        chart_data.categories = categories
+        chart_data.add_series('Critical Vulnerabilities', criticals)
+        chart_data.add_series('High Vulnerabilities', highs)
+
+
+        # add chart to slide --------------------
+        x, y, cx, cy = Inches(2), Inches(1), Inches(10), Inches(6)
+        chart = slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
+        )
+
+        #chart.has_legend = True
+        #chart.legend.position = XL_LEGEND_POSITION.RIGHT
+        #chart.legend.include_in_layout = False
+
+
+        prs.save('CBRTemplate.pptx')
+
 
 controller = controller()
 # controller.getServersWithNoApplications()
@@ -1147,6 +1194,9 @@ controller = controller()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
 # controller.metricsbuilder(days=90)
-controller.dateTrendManager()
-controller.getUsersInTaggedApplications()
+#controller.dateTrendManager()
+#controller.getUsersInTaggedApplications()
+#controller.applicationMetricsManager()
+# Note this function requires: "pip3 install lxml" prior to generating graphs
+#controller.generatePPT()
 # controller.test()
