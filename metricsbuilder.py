@@ -1196,7 +1196,7 @@ controller = controller()
 # controller.metricsbuilder(days=90)
 #controller.dateTrendManager()
 #controller.getUsersInTaggedApplications()
-#controller.applicationMetricsManager()
+controller.applicationMetricsManager()
 # Note this function requires: "pip3 install lxml" prior to generating graphs
 controller.generatePPT()
 # controller.test()
