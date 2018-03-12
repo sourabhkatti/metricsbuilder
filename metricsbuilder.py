@@ -1,11 +1,13 @@
-import os
-import base64
-import json
-import requests
 import argparse
-import re
+import base64
 import calendar
+import csv
+import json
+import os
+import re
 from datetime import datetime, timedelta
+
+import requests
 
 
 # - Offline servers
@@ -22,8 +24,8 @@ class controller:
     #  Location of properties with connection details to the Contrast UI
     teamserver_config_file = "script.properties"
 
-    ####################################################################
-    # Specify date range to retrieve vulnerability trending metrics for
+    header = {}
+
     FOUND_DATE = "FIRST"
     SORTING = "ALL"
     LICENSED_ONLY = False
@@ -49,6 +51,16 @@ class controller:
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
 
         parser.add_argument("-o", help='Specify the path to write text files to', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-i", help='Specify the organization ID', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-t", help='Specify the teamserver URL', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-a", help='Specify the API Key', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-s", help='Specify the Service Key', nargs=1,
+                            type=str, metavar="")
+        parser.add_argument("-u", help='Specify the Username', nargs=1,
                             type=str, metavar="")
 
         argt = parser.parse_args()
@@ -381,9 +393,6 @@ class controller:
             endpoint = "/groups/"
             lineheader = "Group Name, Email Address"
             print("Looping through groups")
-
-
-
 
             if applications is None:
                 for group_id in group_ids:
@@ -965,9 +974,43 @@ class controller:
         try:
             # Get all vulns which need an issue opened for them
             r = requests.get(url=endpoint, headers=self.header)
-            vulns = json.loads(r.text)
-            print(".... Done!")
-            return self.getVulnMetrics(vulns['traces'])
+
+            if r.status_code == 504:
+                limit = 100
+                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                        "/filter/?endDate=" + str(
+                    self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                         "skip_links&quickFilter=" + self.SORTING + "&limit=100&sort=-lastTimeSeen&startDate=" + str(
+                    self.startTimeEpoch) + \
+                           "&timestampFilter=" + self.FOUND_DATE
+
+                r = requests.get(url=endpoint, headers=self.header)
+                vulns = json.loads(r.text)
+                vuln_count = vulns['count']
+                print("\t- Number of vulns:", vuln_count)
+
+                for offset in range(limit, vuln_count, limit):
+
+                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                            "/filter/?endDate=" + str(
+                        self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                             "skip_links&quickFilter=" + self.SORTING + (
+                               "&limit=%d&offset=%d" % (limit, offset)) + "&sort=-lastTimeSeen&startDate=" + str(
+                        self.startTimeEpoch) + \
+                               "&timestampFilter=" + self.FOUND_DATE
+
+                    r = requests.get(url=endpoint, headers=self.header)
+                    next_vulns = json.loads(r.text)
+                    for vuln in next_vulns['traces']:
+                        vulns['traces'].append(vuln)
+                    print("\t\tVulns picked up: ", offset)
+                return self.getVulnMetrics(vulns['traces'])
+            else:
+
+                vulns = json.loads(r.text)
+                print(".... Done!")
+                return self.getVulnMetrics(vulns['traces'])
+
         except Exception as e:
             print("ERROR: Unable to connect to teamserver. Please check your authentication details.")
             print(e)
@@ -1095,6 +1138,7 @@ class controller:
 
         # Write metrics to specified log file
         self.writeApplicationMetrics(applications)
+        self.getUsersInGroups(applications=applications)
 
     def getUsersInTaggedApplications(self):
         untagged_applications = self.getApplicationsWithNoTag()
@@ -1235,16 +1279,64 @@ class controller:
         print(a)
         print(b)
 
+    # Note this function requires: "pip3 install lxml" prior to generating graphs, also run applicationsMetricsManager() first
+    def generatePPT(self):
+        from pptx import Presentation
+        from pptx.chart.data import ChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.util import Inches
+        prs = Presentation("CBRTemplate.pptx")
+
+        slide = prs.slides.add_slide(prs.slide_layouts[9])
+        title_placeholder = slide.shapes.title
+        title_placeholder.text = 'SERIOUS VULNERABILITIES BY APPLICATION'
+
+        # define chart data ---------------------
+        chart_data = ChartData()
+        categories = []
+        criticals = []
+        highs = []
+        with open('ApplicationTraceBreakdown.csv') as csvDataFile:
+            csvReader = csv.reader(csvDataFile)
+            next(csvReader, None)
+            for row in csvReader:
+                # skip this app is there are no criticals or highs
+                if (row[1] != '0' or row[2] != '0'):
+                    categories.append(row[0])
+                    criticals.append(row[1])
+                    highs.append(row[2])
+
+        chart_data.categories = categories
+        chart_data.add_series('Critical Vulnerabilities', criticals)
+        chart_data.add_series('High Vulnerabilities', highs)
+
+        # add chart to slide --------------------
+        x, y, cx, cy = Inches(2), Inches(1), Inches(10), Inches(6)
+        chart = slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
+        )
+
+        # chart.has_legend = True
+        # chart.legend.position = XL_LEGEND_POSITION.RIGHT
+        # chart.legend.include_in_layout = False
+
+
+        prs.save('CBRTemplate.pptx')
+
 
 controller = controller()
 # controller.getServersWithNoApplications()
-# controller.getUsersNotLoggedInDays(days=28)
+# controller.getUsersNotLoggedInDays(days=30)
 # controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
+# controller.dateTrendManager()
+# controller.getUsersInTaggedApplications()
+controller.ApplicationMetrics()
+# Note this function requires: "pip3 install lxml" prior to generating graphs
+controller.generatePPT()
 controller.UsageMetrics(days=28)
 controller.VulnerabilityTrendMetrics()
 # controller.getUsersInTaggedApplications()
-# controller.applicationMetricsManager()
 # controller.test()
