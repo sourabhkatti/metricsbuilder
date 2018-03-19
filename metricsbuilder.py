@@ -6,7 +6,7 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
-
+import configparser
 import requests
 
 
@@ -22,17 +22,17 @@ import requests
 class controller:
     ####################################################################
     #  Location of properties with connection details to the Contrast UI
-    teamserver_config_file = "script.properties"
+    properties_file = "script.properties"
 
     header = {}
 
-    FOUND_DATE = "LAST"
+    FOUND_DATE = "FIRST"
     SORTING = "ALL"
     LICENSED_ONLY = False
     application_licensed_status = {}
 
     # Starting date
-    startingMonth = 1
+    startingMonth = 6
     startingDay = 1
     startingYear = 2017
 
@@ -46,6 +46,9 @@ class controller:
     endTimeEpoch = 0
     startTimeEpoch = 0
     header = {}
+
+    groups = {}
+    group_details = {}
 
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
@@ -69,6 +72,7 @@ class controller:
         else:
             self.outputpath = os.getcwd()
         print("Writing output to", self.outputpath)
+
         self.getTeamserverConnection()
 
     # noinspection PyShadowingBuiltins
@@ -76,35 +80,30 @@ class controller:
         """
         Open properties file and set the Contrast UI connection details
         """
+        cfp = configparser.ConfigParser()
+        cfp.read(self.properties_file)
 
-        f = open(self.teamserver_config_file, 'r')
-        for property in f.readlines():
-            key, value = property.split("=")
-            if key.find("username") is not -1:
-                if value[-1] is "\n":
-                    self.USERNAME = value[:-1]
-                else:
-                    self.USERNAME = value
-            if key.find("organization.id") is not -1:
-                if value[-1] is "\n":
-                    self.ORGANIZATION_ID = value[:-1]
-                else:
-                    self.ORGANIZATION_ID = value
-            if key.find("apikey") is not -1:
-                if value[-1] is "\n":
-                    self.API_KEY = value[:-1]
-                else:
-                    self.API_KEY = value
-            if key.find("servicekey") is not -1:
-                if value[-1] is "\n":
-                    self.SERVICE_KEY = value[:-1]
-                else:
-                    self.SERVICE_KEY = value
-            if key.find("teamserver.url") is not -1:
-                if value[-1] is "\n":
-                    self.TEAMSERVER_URL = value[:-1]
-                else:
-                    self.TEAMSERVER_URL = value
+        # Get all properties
+        try:
+            self.USERNAME = cfp.get("Contrast UI Details", "contrast.username")
+        except:
+            print("Please specify contrast.username in the script.properties")
+        try:
+            self.ORGANIZATION_ID = cfp.get("Contrast UI Details", "contrast.organization.id")
+        except:
+            print("Please specify contrast.organizationi.id in the script.properties")
+        try:
+            self.API_KEY = cfp.get("Contrast UI Details", "contrast.apikey")
+        except:
+            print("Please specify contrast.apikey in the script.properties")
+        try:
+            self.SERVICE_KEY = cfp.get("Contrast UI Details", "contrast.servicekey")
+        except:
+            print("Please specify contrast.servicekey in the script.properties")
+        try:
+            self.TEAMSERVER_URL = cfp.get("Contrast UI Details", "contrast.teamserver.url")
+        except:
+            print("Please specify contrast.teamserver.url in the script.properties")
 
         self.AUTHORIZATION = base64.b64encode((self.USERNAME + ':' + self.SERVICE_KEY).encode('utf-8'))
         self.header = {
@@ -138,7 +137,7 @@ class controller:
         jsonreader = json.loads(response.text)
 
         # Setup file to output results to
-        filename = self.outputpath + "/OfflineServers.txt"
+        filename = self.outputpath + "/OfflineServers.csv"
         filewriter = open(filename, 'w+')
 
         # Loop through each server and determine if it is offline
@@ -149,7 +148,7 @@ class controller:
             filewriter.write("The following servers are offline as of %s:\n" % todaydate)
             for server in jsonreader["servers"]:
                 if server['status'] == "OFFLINE":  # If the status is offline, add it to our list
-                    linetowrite = ("\t%d. %s" % (servernum, server['name']))
+                    linetowrite = ("\t%d,%s" % (servernum, server['name']))
                     filewriter.write(linetowrite + "\n")
                     print(linetowrite)
                     servernum += 1
@@ -174,7 +173,7 @@ class controller:
         jsonreader = json.loads(response.text)
 
         # Setup file to output results to
-        filename = self.outputpath + "/NeverLoggedInUsers.txt"
+        filename = self.outputpath + "/NeverLoggedInUsers.csv"
         filewriter = open(filename, 'w+')
 
         # Loop through each user to determine if they have ever logged in
@@ -189,7 +188,7 @@ class controller:
                     # noinspection PyUnusedLocal
                     lastlogintime = user['login']['last_login_time']
                 except:
-                    linetowrite = ("\t%d. %s" % (user_num, user['user_uid']))
+                    linetowrite = ("\t%d,%s" % (user_num, user['user_uid']))
                     filewriter.write(linetowrite + "\n")
                     print(linetowrite)
                     user_num += 1
@@ -220,15 +219,15 @@ class controller:
             jsonreader = json.loads(response.text)
 
             # Setup file to output the text to
-            filestring = "/UsersWhoHaventLoggedIn_%d_days.txt" % days
+            filestring = "/UsersWhoHaventLoggedIn_%d_days.csv" % days
             filename = self.outputpath + filestring
             filewriter = open(filename, 'w+')
 
             # Loop through each user and get their last login time, compare it to the specified # of days
             if jsonreader["success"] is True:
-                print("\nThe following users have NOT logged into the teamserver in the last %d day(s):" % days)
+                print("\nGetting users who have NOT logged into the teamserver in the past %d day(s)..." % days)
                 filewriter.write(
-                    "The following users have NOT logged into the teamserver in the last %d day(s):\n" % days)
+                    "Username,Days Not Logged In\n")
                 usercount = 1
                 for user in jsonreader["users"]:
                     try:
@@ -239,21 +238,23 @@ class controller:
 
                         # Parse out month, day and year and find the difference between today and that date
                         year, month, day = lastlogintime.split("-")
-                        dt_lastlogintime = datetime(int(year), int(month), int(day))
-                        todaydate = datetime.today()
-                        date_diff = (todaydate - dt_lastlogintime).days
+                        # dt_lastlogintime = datetime(int(year), int(month), int(day))
+                        date_diff = (datetime.today() - datetime(int(year), int(month), int(day))).days
 
                         # If difference between dates is greater than the one specified, add it to our output
                         if float(date_diff) > float(days):
                             linetowrite = (
-                                "\t%d. %s logged in %d days ago" % (usercount, user['user_uid'], date_diff))
+                                "%s,%d" % (user['user_uid'], date_diff))
                             filewriter.write(linetowrite + "\n")
-                            print(linetowrite)
                             usercount += 1
-                    except Exception as e:
-                        print(e)
+                    except Exception:
+                        linetowrite = (
+                            "%s,%s" % (user['user_uid'], "Never_Logged_In"))
+                        filewriter.write(linetowrite + "\n")
+                        usercount += 1
                         continue
             filewriter.close()
+            print("\t- Metrics written to %s" % filename)
 
     def getApplicationsWithNoGroup(self):
         """
@@ -273,7 +274,7 @@ class controller:
         jsonreader = json.loads(response.text)
 
         # Setup file to output results to
-        filename = self.outputpath + "/ApplicationsWithNoGroup.txt"
+        filename = self.outputpath + "/ApplicationsWithNoGroup.csv"
         filewriter = open(filename, 'w+')
 
         if jsonreader["success"] is True:
@@ -360,26 +361,28 @@ class controller:
         response = requests.get(url=url, headers=header, stream=True)
         jsonreader = json.loads(response.text)
 
-        filename = self.outputpath + "/ServersWithNoApplications.txt"
+        filename = self.outputpath + "/ServersWithNoApplications.csv"
         filewriter = open(filename, 'w+')
 
         # Loop through all servers
         if jsonreader["success"] is True:
             servernumber = 1
-            print("\nThe following servers do not have an application:")
-            filewriter.write("The following servers do not have an application:\n")
+            print("\nGetting servers which do not have an application")
+            filewriter.write("Server Name,Server Hostname")
 
             # Add server to our list
             for server in jsonreader['servers']:
                 linetowrite = (
-                    "\t%d. %s running at hostname: '%s'" % (servernumber, server['name'], server['hostname']))
+                    "\t%s,%s" % (server['name'], server['hostname']))
                 filewriter.write(linetowrite + "\n")
-                print(linetowrite)
                 servernumber += 1
+            filewriter.close()
+            print("\t- Metrics written to %s" % filename)
 
-    def getUsersInGroups(self, applications=None):
+    def getUsersInGroups(self, applications=None, return_object=list):
         """
         Output a list of all users in each group
+        :param return_object: format to return users and applications in. CSV string or a list with every user.
         :param applications: if specified, output a list of all users associated with each application.
         """
         endpoint = "/groups?expand=users,applications,skip_links&offset=0&q=&quickFilter=ALL&sort=name"
@@ -391,116 +394,132 @@ class controller:
         }
 
         # Send API request
-        response = requests.get(url=url, headers=header, stream=True)
-        group = json.loads(response.text)
+        if not self.groups:
+            response = requests.get(url=url, headers=header, stream=True)
+            groups = json.loads(response.text)
+            self.groups = groups
 
         # Specify output file based on whether a list of applications is provided
         if applications is None:
-            filename = self.outputpath + "/UsersInGroups.txt"
+            filename = self.outputpath + "/UsersInGroups.csv"
             filewriter = open(filename, 'w+')
         else:
-            app_user_file = self.outputpath + "/UsersForApp.csv"
-            app_user_filewriter = open(app_user_file, 'w+')
+            filename = self.outputpath + "/UsersForApp.csv"
+            filewriter = open(filename, 'w+')
 
-        if group['success'] is True:
+        if self.groups['success'] is True:
 
             # Build up list of all group IDs
-            print("Build up list of all group IDs")
             group_ids = []
-            for custom_group in group['custom_groups']['groups']:
+            for custom_group in self.groups['custom_groups']['groups']:
                 group_ids.append(custom_group['group_id'])
-            for predefined_group in group['predefined_groups']['groups']:
+            for predefined_group in self.groups['predefined_groups']['groups']:
                 group_ids.append(predefined_group['group_id'])
 
-            # Loop through all groups and get users in each group
-            endpoint = "/groups/"
-            lineheader = "Group Name, Email Address"
-            print("Looping through groups")
-
             if applications is None:
+                filewriter.write("Group Name,First Name,Last Name,Email Address\n")
                 for group_id in group_ids:
-                    linetowrite = "\n" + group['name'] + "\n"
-                    filewriter.write(linetowrite)
-                    print("\n" + group['name'])
+                    url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/groups/" + str(group_id)
+
+                    # Send request
+                    response = requests.get(url=url, headers=header, stream=True)
+                    jsonreader = json.loads(response.text)
+                    groups = jsonreader['group']
+
                     try:
-                        for user in group['users']:
-                            linetowrite = ("\t" + user['uid'] + "\n")
-                            print(("\t" + user['uid']))
-                            filewriter.write(linetowrite)
-                            return
+                        for user in groups['users']:
+                            filewriter.write(
+                                groups['name'] + ',' + user['first_name'] + ',' + user['last_name'] + ',' + user[
+                                    'uid'] + "\n")
                     except Exception as e:
                         print(e)
                         continue
+
             else:
                 # Master dictionary of mappings between applications and users
                 group_apps_users = {}
 
                 for group_id in group_ids:
-                    # Reach out to the group's endpoint and get a list of all applications and users
-                    url = self.TEAMSERVER_URL + "/" + self.ORGANIZATION_ID + "/" + endpoint + str(group_id)
 
-                    # Send request
-                    response = requests.get(url=url, headers=header, stream=True)
-                    group = json.loads(response.text)['group']
+                    if group_id not in self.group_details.keys():
+                        # Reach out to the group's endpoint and get a list of all applications and users
+                        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/groups/" + str(group_id)
+
+                        # Send request
+                        response = requests.get(url=url, headers=header, stream=True)
+                        groups = json.loads(response.text)['group']
+                        self.group_details[group_id] = groups
+                    else:
+                        groups = self.group_details[group_id]
 
                     try:
                         users = []
                         applications_in_group = []
                         # Get all users in the group
-                        for user in group['users']:
+                        for user in groups['users']:
                             users.append(user['uid'])
 
                         # Get all applications in the group. If None, the group has access to ALL applications
-                        if group['applications'] is None:
+                        if groups['applications'] is None:
                             applications_in_group = None
                         else:
-                            for application_in_group in group['applications']:
+                            for application_in_group in groups['applications']:
                                 for app in application_in_group['applications']:
                                     applications_in_group.append(app['name'])
 
                         # Add users and applications to the master mapping dictionary
-                        group_apps_users[group['name']] = {'users': users, 'apps': applications_in_group}
+                        group_apps_users[groups['name']] = {'users': users, 'apps': applications_in_group}
                     except Exception as e:
                         print(e)
 
                 # Generate the spreadsheet of application <=> user mapping
-                app_user_mappings = {}
+                app_user_mappings_string = {}
+                app_user_mappings_list = {}
                 for search_app in applications:
-                    for group, app_user in group_apps_users.items():
+                    app_user_mappings_list[search_app] = []
+                    for groups, app_user in group_apps_users.items():
                         app_user_mapping = ""
                         apps = app_user['apps']
                         users = app_user['users']
+                        users_list = []
 
                         # If ALL applications, add this application to every user
                         if apps is None:
-                            # app_user_mapping += search_app + "-(ALL),"
                             for user in users:
+                                app_user_mappings_list[search_app].append(user)
                                 app_user_mapping += user + ','
-                            if search_app in app_user_mappings.keys():
+                            if search_app in app_user_mappings_string.keys():
                                 appname_without_comma = search_app.replace(",", "-")
-                                app_user_mappings[appname_without_comma] += app_user_mapping
+                                app_user_mappings_string[appname_without_comma] += app_user_mapping
                             else:
                                 appname_without_comma = search_app.replace(",", "-")
-                                app_user_mappings[appname_without_comma] = app_user_mapping
+                                app_user_mappings_string[appname_without_comma] = app_user_mapping
                         else:
                             # Determine if the current user has access to one of the apps in the specified app list
                             if search_app in apps:
                                 # app_user_mapping += search_app + ','
                                 for user in users:
                                     app_user_mapping += user + ','
-                                if search_app in app_user_mappings.keys():
+                                    app_user_mappings_list[search_app].append(user)
+                                if search_app in app_user_mappings_string.keys():
                                     appname_without_comma = search_app.replace(",", "-")
-                                    app_user_mappings[appname_without_comma] += app_user_mapping
+                                    app_user_mappings_string[appname_without_comma] += app_user_mapping
                                 else:
                                     appname_without_comma = search_app.replace(",", "-")
-                                    app_user_mappings[appname_without_comma] = app_user_mapping
-                print(app_user_mappings)
+                                    app_user_mappings_string[appname_without_comma] = app_user_mapping
 
                 # Generate csv of user and app mappings
-                for app_name, users in app_user_mappings.items():
+                for app_name, users in app_user_mappings_string.items():
                     linetowrite = app_name + ',' + users + '\n'
-                    app_user_filewriter.write(linetowrite)
-                app_user_filewriter.close()
+                    filewriter.write(linetowrite)
+                filewriter.close()
+            print("\t- Metrics output to %s" % filename)
+            if return_object is "list":
+                return app_user_mappings_list
+            if return_object is "string":
+                return app_user_mappings_string
+            if return_object is "both":
+                return app_user_mappings_string, app_user_mappings_list
 
     def getPercentUsersLoggedIn(self, days):
         """
@@ -517,15 +536,9 @@ class controller:
         response = requests.get(url=url, headers=header, stream=True)
         jsonreader = json.loads(response.text)
 
-        # Setup file to output the text to
-        filestring = "/usage_metrics.csv"
-        filename = self.outputpath + filestring
-        filewriter = open(filename, 'w+')
-
         # Loop through each user and get their last login time, compare it to the specified # of days
         if jsonreader["success"] is True:
             total_users = jsonreader["users"].__len__()
-            # print("\nThe following users have logged into the teamserver for more than %d day(s):" % days)
             usercount = 0
             for user in jsonreader["users"]:
                 try:
@@ -536,16 +549,13 @@ class controller:
 
                     # Parse out month, day and year and find the difference between today and that date
                     year, month, day = lastlogintime.split("-")
-                    dt_lastlogintime = datetime(int(year), int(month), int(day))
-                    todaydate = datetime.today()
-                    date_diff = (todaydate - dt_lastlogintime).days
-
-                    earlier_date = (datetime.today() - timedelta(days)).strftime("%Y-%m-%d")
-                    todaydate_formatted = todaydate.strftime("%Y-%m-%d")
+                    date_diff = (datetime.today() - datetime(int(year), int(month), int(day))).days
 
                     # If difference between dates is greater than the one specified, add it to our output
                     if float(date_diff) < float(days):
                         usercount += 1
+                    else:
+                        print(days)
 
                 except Exception as e:
                     # print(e)
@@ -600,7 +610,8 @@ class controller:
         license_applied_counter = 0
         license_applied_keyword = "license_applied"
 
-        print("Total number of lines: ", jsonreader['logs'].__len__())
+        print("Parsing the audit log")
+        print("\tTotal number of lines: ", jsonreader['logs'].__len__())
 
         # Setup headers for csv to output
         filewriter.write("date,action,username,message\n")
@@ -686,17 +697,11 @@ class controller:
                 if username is not "":
                     if keyword is "trace_status_change":
                         for trace in range(0, trace_num):
-                            print(log_message)
                             line = timestamp + ',' + keyword + ',' + username + ',' + message + ',\n'
                             filewriter.write(line)
-                            print(line)
                     else:
-                        print(log_message)
                         line = timestamp + ',' + keyword + ',' + username + ',' + message + ',\n'
                         filewriter.write(line)
-                        print(line)
-
-                        # print("====> ",timestamp, keyword, username, message)
             except:
                 continue
 
@@ -747,7 +752,7 @@ class controller:
                 print("The day should be between 1 and 31!")
                 self.endingDay = int(input("\tEnding day (1-31): "))
 
-    def VulnerabilityTrendMetrics(self, printMetrics=True):
+    def VulnerabilityTrendMetrics(self, application_metrics, printMetrics=True):
         # Get vulnerabilities per month for date range specified
         """
         Generate and output a csv of trending metrics for vulnerabilities in the Contrast UI.
@@ -758,6 +763,8 @@ class controller:
 
         - "Serious" vulnerabilities = vulnerabilities marked as Critical and High
         """
+
+        print("\n\nGetting Vulnerability Metrics")
         yearlyMetrics = self.dateTrendManager_Organization(printMetrics=printMetrics)
 
         # Generate cumulative counts for all retrieved vulnerabilities
@@ -765,7 +772,8 @@ class controller:
                                                                                  printMetrics=printMetrics)
 
         # Output the cumulative metrics to a file
-        self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories, printMetrics)
+        self.writeCumulativeMetrics(cumulative_yearly_metrics, serious_categories,
+                                    application_metrics=application_metrics, printMetrics=printMetrics)
 
     def dateTrendManager_Organization(self, printMetrics=True):
         """
@@ -877,178 +885,245 @@ class controller:
             yearlyMetrics[year_index] = monthlyMetrics
         return yearlyMetrics
 
-    def dateTrendManager_Application(self, printMetrics=True):
-        """
-        Manages how vulnerabilities are associated with the time they were found
-        :param printMetrics:
-        :return:
-        """
+    # def dateTrendManager_Application(self, printMetrics=True):
+    #     """
+    #     Manages how vulnerabilities are associated with the time they were found
+    #     :param printMetrics:
+    #     :return:
+    #     """
+    #
+    #     # Get the months and days we'll be looking through
+    #     self.getDateRange()
+    #
+    #     yearlyMetrics = {}
+    #
+    #     # Loop through all years
+    #     year_index = self.startingYear
+    #
+    #     # Check if metrics should be pulled for licensed applications only.
+    #     # If true, generate a list of licensed application IDs
+    #     if self.LICENSED_ONLY:
+    #         applications = self.getApplications()
+    #         self.application_licensed_status = self.getApplicationLicenseStatus(applications)
+    #
+    #         # self.startTimeEpoch = int(
+    #         #     datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
+    #         # self.endTimeEpoch = int(
+    #         #     datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
+    #
+    #     # If time range spans multiple years, loop through all months in those years except the ending year
+    #     if year_index < self.endingYear:
+    #         # Loop through all months in  previous years
+    #         starting_month_index = self.startingMonth
+    #         while year_index < self.endingYear:
+    #             monthlyMetrics = {}
+    #             for month_index in range(starting_month_index, 13):
+    #                 month = datetime(year_index, month_index, 1).strftime("%B")
+    #                 endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
+    #                 self.startTimeEpoch = int((
+    #                                               datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+    #                                                   hours=3)).timestamp()) * 1000
+    #                 self.endTimeEpoch = int((
+    #                                             datetime(year_index, month_index, endingDay, 23, 59, 59,
+    #                                                      99) - timedelta(hours=3)).timestamp()) * 1000
+    #                 print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+    #                     month, 1, year_index, month, endingDay, year_index))
+    #                 monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for the month
+    #             yearlyMetrics[year_index] = monthlyMetrics
+    #             year_index += 1
+    #             starting_month_index = 1
+    #
+    #         # Loop through all months in the current year except the last month
+    #         monthlyMetrics = {}
+    #         starting_month_index = 1
+    #         for month_index in range(starting_month_index, self.endingMonth):
+    #             month = datetime(year_index, month_index, 1).strftime("%B")
+    #             endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
+    #             self.startTimeEpoch = int((
+    #                                           datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+    #                                               hours=3)).timestamp()) * 1000
+    #             self.endTimeEpoch = int((
+    #                                         datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
+    #                                             hours=3)).timestamp()) * 1000
+    #             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+    #                 month, 1, year_index, month, endingDay, year_index))
+    #             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+    #
+    #         # Get vulns for the last month
+    #         month_index = self.endingMonth
+    #         month = datetime(year_index, month_index, 1).strftime("%B")
+    #         self.startTimeEpoch = int((
+    #                                       datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+    #                                           hours=3)).timestamp()) * 1000
+    #         self.endTimeEpoch = int((
+    #                                     datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
+    #                                         hours=3)).timestamp()) * 1000
+    #         print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+    #             month, 1, year_index, month, self.endingDay, year_index))
+    #         monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+    #         yearlyMetrics[year_index] = monthlyMetrics
+    #
+    #     else:
+    #
+    #         # If the starting year and ending year are the same, loop through all months except the last month
+    #         monthlyMetrics = {}
+    #         for month_index in range(self.startingMonth, self.endingMonth):
+    #             month = datetime(year_index, month_index, 1).strftime("%B")
+    #             endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
+    #             self.startTimeEpoch = int((
+    #                                           datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+    #                                               hours=3)).timestamp()) * 1000
+    #             self.endTimeEpoch = int((
+    #                                         datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
+    #                                             hours=3)).timestamp()) * 1000
+    #             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+    #                 month, 1, year_index, month, endingDay, year_index))
+    #             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+    #
+    #         # Get vuln metrics for the last month
+    #         month_index = self.endingMonth
+    #         month = datetime(year_index, month_index, 1).strftime("%B")
+    #         self.startTimeEpoch = int((
+    #                                       datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
+    #                                           hours=3)).timestamp()) * 1000
+    #         self.endTimeEpoch = int((
+    #                                     datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
+    #                                         hours=3)).timestamp()) * 1000
+    #         print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
+    #             month, 1, year_index, month, self.endingDay, year_index))
+    #         monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
+    #         yearlyMetrics[year_index] = monthlyMetrics
+    #     return yearlyMetrics
 
-        # Get the months and days we'll be looking through
-        self.getDateRange()
-
-        yearlyMetrics = {}
-
-        # Loop through all years
-        year_index = self.startingYear
-
-        # Check if metrics should be pulled for licensed applications only.
-        # If true, generate a list of licensed application IDs
-        if self.LICENSED_ONLY:
-            applications = self.getApplications()
-            self.application_licensed_status = self.getApplicationLicenseStatus(applications)
-
-            # self.startTimeEpoch = int(
-            #     datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
-            # self.endTimeEpoch = int(
-            #     datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
-
-        # If time range spans multiple years, loop through all months in those years except the ending year
-        if year_index < self.endingYear:
-            # Loop through all months in  previous years
-            starting_month_index = self.startingMonth
-            while year_index < self.endingYear:
-                monthlyMetrics = {}
-                for month_index in range(starting_month_index, 13):
-                    month = datetime(year_index, month_index, 1).strftime("%B")
-                    endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-                    self.startTimeEpoch = int((
-                                                  datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-                                                      hours=3)).timestamp()) * 1000
-                    self.endTimeEpoch = int((
-                                                datetime(year_index, month_index, endingDay, 23, 59, 59,
-                                                         99) - timedelta(hours=3)).timestamp()) * 1000
-                    print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-                        month, 1, year_index, month, endingDay, year_index))
-                    monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for the month
-                yearlyMetrics[year_index] = monthlyMetrics
-                year_index += 1
-                starting_month_index = 1
-
-            # Loop through all months in the current year except the last month
-            monthlyMetrics = {}
-            starting_month_index = 1
-            for month_index in range(starting_month_index, self.endingMonth):
-                month = datetime(year_index, month_index, 1).strftime("%B")
-                endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-                self.startTimeEpoch = int((
-                                              datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-                                                  hours=3)).timestamp()) * 1000
-                self.endTimeEpoch = int((
-                                            datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
-                                                hours=3)).timestamp()) * 1000
-                print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-                    month, 1, year_index, month, endingDay, year_index))
-                monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-
-            # Get vulns for the last month
-            month_index = self.endingMonth
-            month = datetime(year_index, month_index, 1).strftime("%B")
-            self.startTimeEpoch = int((
-                                          datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-                                              hours=3)).timestamp()) * 1000
-            self.endTimeEpoch = int((
-                                        datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
-                                            hours=3)).timestamp()) * 1000
-            print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-                month, 1, year_index, month, self.endingDay, year_index))
-            monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-            yearlyMetrics[year_index] = monthlyMetrics
-
-        else:
-
-            # If the starting year and ending year are the same, loop through all months except the last month
-            monthlyMetrics = {}
-            for month_index in range(self.startingMonth, self.endingMonth):
-                month = datetime(year_index, month_index, 1).strftime("%B")
-                endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-                self.startTimeEpoch = int((
-                                              datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-                                                  hours=3)).timestamp()) * 1000
-                self.endTimeEpoch = int((
-                                            datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
-                                                hours=3)).timestamp()) * 1000
-                print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-                    month, 1, year_index, month, endingDay, year_index))
-                monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-
-            # Get vuln metrics for the last month
-            month_index = self.endingMonth
-            month = datetime(year_index, month_index, 1).strftime("%B")
-            self.startTimeEpoch = int((
-                                          datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-                                              hours=3)).timestamp()) * 1000
-            self.endTimeEpoch = int((
-                                        datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
-                                            hours=3)).timestamp()) * 1000
-            print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-                month, 1, year_index, month, self.endingDay, year_index))
-            monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-            yearlyMetrics[year_index] = monthlyMetrics
-        return yearlyMetrics
-
-    def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, printMetrics):
+    def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, application_metrics, printMetrics):
         cumulative_metrics_filename = self.outputpath + "/CumulativeMetrics.csv"
         cumulative_filewriter = open(cumulative_metrics_filename, 'w+')
 
         serious_metrics = self.outputpath + "/SeriousMetrics.csv"
         serious_filewriter = open(serious_metrics, 'w+')
 
-        metrics_linetowrite = [
-            "Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
+        if not application_metrics:
+            metrics_linetowrite = [
+                "Year,Month,Total Traces,Serious Traces,Cumulative Total Traces,Cumulative Serious Traces"]
 
-        serious_category_header = "Year,Month"
-        serious_category_total = 0
-        serious_category_lines = []
-        # for category in serious_categories:
-        #     serious_category_linetowrite += str(category) + ','
+            serious_category_header = "Year,Month"
+            serious_category_total = 0
+            serious_category_lines = []
 
-        for category in serious_categories.keys():
-            serious_category_header += ',' + category
-        serious_category_header += ',Total'
+            for category in serious_categories.keys():
+                serious_category_header += ',' + category
+            serious_category_header += ',Total'
 
-        for year, monthlymetrics in cumulativeMetrics.items():
-            for month, metrics in monthlymetrics.items():
-                monthly_serious_category_count = 0
-                serious_category_linetowrite = str(year) + ',' + str(month) + ','
-                mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(
-                    metrics[
-                        'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(
-                    metrics['cumulative_serious_traces'])
-                try:
-                    # Loop through all serious categories found during date range
-                    if serious_categories.__len__() > 0:
-                        # Loop through all serious categories in the month
-                        for category, total_category_count in serious_categories.items():
-                            # try:
-                            # If the category is the current serious metric
-                            if category in metrics['serious_category_counts'].keys():
-                                count = metrics['serious_category_counts'][category]
-                                monthly_serious_category_count += count
-                                serious_category_linetowrite += str(count) + ','
-                            else:
-                                serious_category_linetowrite += '0,'
-                    serious_category_total += monthly_serious_category_count
-                    # except:
-                    #     serious_category_linetowrite += '0,'
-                except Exception as e:
-                    print(e)
+            for year, monthlymetrics in cumulativeMetrics.items():
+                for month, metrics in monthlymetrics.items():
+                    monthly_serious_category_count = 0
+                    serious_category_linetowrite = str(year) + ',' + str(month) + ','
+                    mec_linetowrite = str(year) + ',' + str(month) + ',' + str(metrics['total_traces']) + ',' + str(
+                        metrics[
+                            'serious_traces']) + ',' + str(metrics['cumulative_total_traces']) + ',' + str(
+                        metrics['cumulative_serious_traces'])
+                    try:
+                        # Loop through all serious categories found during date range
+                        if serious_categories.__len__() > 0:
+                            # Loop through all serious categories in the month
+                            for category, total_category_count in serious_categories.items():
+                                # try:
+                                # If the category is the current serious metric
+                                if category in metrics['serious_category_counts'].keys():
+                                    count = metrics['serious_category_counts'][category]
+                                    monthly_serious_category_count += count
+                                    serious_category_linetowrite += str(count) + ','
+                                else:
+                                    serious_category_linetowrite += '0,'
+                        serious_category_total += monthly_serious_category_count
+                    except Exception as e:
+                        print(e)
 
-                serious_category_linetowrite += str(monthly_serious_category_count)
-                metrics_linetowrite.append(mec_linetowrite)
-                serious_category_lines.append(serious_category_linetowrite)
+                    serious_category_linetowrite += str(monthly_serious_category_count)
+                    metrics_linetowrite.append(mec_linetowrite)
+                    serious_category_lines.append(serious_category_linetowrite)
 
-        for line in metrics_linetowrite:
-            cumulative_filewriter.write(line + '\n')
+            for line in metrics_linetowrite:
+                cumulative_filewriter.write(line + '\n')
 
-        serious_filewriter.write(serious_category_header + '\n')
-        for line in serious_category_lines:
-            serious_filewriter.write(line + '\n')
-        linetowrite = "Total,Total"
-        for count in serious_categories.values():
-            linetowrite += ',' + str(count)
-        linetowrite += ',' + str(serious_category_total)
-        serious_filewriter.write(linetowrite)
+            serious_filewriter.write(serious_category_header + '\n')
+            for line in serious_category_lines:
+                serious_filewriter.write(line + '\n')
+            linetowrite = "Total,Total"
+            for count in serious_categories.values():
+                linetowrite += ',' + str(count)
+            linetowrite += ',' + str(serious_category_total)
+            serious_filewriter.write(linetowrite)
+
+        if application_metrics:
+            metrics_linetowrite = [
+                "Year,Month,Application Name,Environment,Critical,High,Medium,Low,Note,Total Traces,Serious Traces,"
+                "Cumulative Total Traces,Cumulative Serious Traces"]
+
+            serious_category_header = "Year,Month"
+            serious_category_total = 0
+            serious_category_lines = []
+            # for category in serious_categories:
+            #     serious_category_linetowrite += str(category) + ','
+
+            for category in serious_categories.keys():
+                serious_category_header += ',' + category
+            serious_category_header += ',Total'
+            for year, monthlymetrics in cumulativeMetrics.items():
+                for month, metrics in monthlymetrics.items():
+                    applications = metrics['applications']
+                    for application, app_metrics in applications.items():
+                        environments = app_metrics['environment']
+                        for environment, environment_metrics in environments.items():
+                            mec_linetowrite = str(year) + ',' + str(month) + ',' + application + ',' + environment + ',' \
+                                              + str(environment_metrics['critical']) + ',' + str(
+                                environment_metrics['high']) + ',' \
+                                              + str(environment_metrics['medium']) + ',' + str(
+                                environment_metrics['low']) + ',' \
+                                              + str(environment_metrics['note']) + ',' + str(
+                                metrics['total_traces']) + ',' + \
+                                              str(metrics['serious_traces']) + ',' + str(
+                                metrics['cumulative_total_traces']) + ',' \
+                                              + str(metrics['cumulative_serious_traces'])
+                            metrics_linetowrite.append(mec_linetowrite)
+
+                    monthly_serious_category_count = 0
+                    serious_category_linetowrite = str(year) + ',' + str(month) + ','
+
+                    try:
+                        # Loop through all serious categories found during date range
+                        if serious_categories.__len__() > 0:
+                            # Loop through all serious categories in the month
+                            for category, total_category_count in serious_categories.items():
+                                # try:
+                                # If the category is the current serious metric
+                                if category in metrics['serious_category_counts'].keys():
+                                    count = metrics['serious_category_counts'][category]
+                                    monthly_serious_category_count += count
+                                    serious_category_linetowrite += str(count) + ','
+                                else:
+                                    serious_category_linetowrite += '0,'
+                        serious_category_total += monthly_serious_category_count
+                        # except:
+                        #     serious_category_linetowrite += '0,'
+                    except Exception as e:
+                        print(e)
+
+                    serious_category_linetowrite += str(monthly_serious_category_count)
+
+                    serious_category_lines.append(serious_category_linetowrite)
+
+            for line in metrics_linetowrite:
+                cumulative_filewriter.write(line + '\n')
+
+            serious_filewriter.write(serious_category_header + '\n')
+            for line in serious_category_lines:
+                serious_filewriter.write(line + '\n')
+            linetowrite = "Total,Total"
+            for count in serious_categories.values():
+                linetowrite += ',' + str(count)
+            linetowrite += ',' + str(serious_category_total)
+            serious_filewriter.write(linetowrite)
 
         cumulative_filewriter.close()
         serious_filewriter.close()
@@ -1087,19 +1162,15 @@ class controller:
     # Get vulnerabilities based on the specified date range
     def getVulnsByDate(self):
         print(
-            "Fetch Vulnerabilities, sorting by " + self.SORTING + " and " + self.FOUND_DATE + " found in the date range...")
+            "Fetch Vulnerabilities, sorting by " + self.SORTING + " and " + self.FOUND_DATE +
+            " found in the date range...")
 
         endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
                                                                 "/filter/?endDate=" + str(
             self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                 "skip_links&quickFilter=" + self.SORTING + "&limit=100000&sort=-lastTimeSeen&startDate=" + str(
-            self.startTimeEpoch) + \
+                                 "skip_links&quickFilter=" + self.SORTING + \
+                   "&limit=100000&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
                    "&timestampFilter=" + self.FOUND_DATE
-
-        # endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
-        # "/filter/?endDate=1517461140000&expand=application,servers,violations,bugtracker,
-        # " \ "skip_links&quickFilter=" + self.SORTING +
-        # "&limit=100000&sort=-lastTimeSeen&startDate=1514782800000&timestampFilter=" + self.FOUND_DATE
 
         print("\tSending request to teamserver", end="")
 
@@ -1112,8 +1183,8 @@ class controller:
                 endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
                                                                         "/filter/?endDate=" + str(
                     self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                         "skip_links&quickFilter=" + self.SORTING + "&limit=100&sort=-lastTimeSeen&startDate=" + str(
-                    self.startTimeEpoch) + \
+                                         "skip_links&quickFilter=" + self.SORTING + \
+                           "&limit=100&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
                            "&timestampFilter=" + self.FOUND_DATE
 
                 r = requests.get(url=endpoint, headers=self.header)
@@ -1123,12 +1194,11 @@ class controller:
 
                 for offset in range(limit, vuln_count, limit):
 
-                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
-                                                                            "/filter/?endDate=" + str(
-                        self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                             "skip_links&quickFilter=" + self.SORTING + (
-                                   "&limit=%d&offset=%d" % (limit, offset)) + "&sort=-lastTimeSeen&startDate=" + str(
-                        self.startTimeEpoch) + \
+                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces/filter/?endDate=" + \
+                               str(self.endTimeEpoch) + \
+                               "&expand=application,servers,violations,bugtracker,skip_links&quickFilter=" + \
+                               self.SORTING + ("&limit=%d&offset=%d" % (limit, offset)) + \
+                               "&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
                                "&timestampFilter=" + self.FOUND_DATE
 
                     r = requests.get(url=endpoint, headers=self.header)
@@ -1205,6 +1275,7 @@ class controller:
                 else:
                     if vuln['default_severity'] in ("CRITICAL", "HIGH"):
                         seriousVulnCounter += 1
+
                         if vuln['rule_name'] in seriousCategoryCounter.keys():
                             seriousCategoryCounter[vuln['rule_name']] += 1
                         else:
@@ -1217,7 +1288,6 @@ class controller:
 
                     if vuln['application']['name'] in application_traces.keys():
                         application_traces[vuln['application']['name']]['total_traces'] += 1
-
                     else:
                         application_traces[vuln['application']['name']] = {'total_traces': 1}
                         application_traces[vuln['application']['name']].update(
@@ -1348,7 +1418,6 @@ class controller:
             r = requests.get(url=endpoint, headers=self.header)
             if r.status_code == 504:
                 limit = 50
-                offset = 0
                 endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/applications/filter?expand=scores,license," \
                                                                         "trace_breakdown,compliance_policy," \
                                                                         "production_protected," \
@@ -1363,7 +1432,7 @@ class controller:
                 for offset in range(limit, app_count, limit):
                     endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + (
                         "/applications/filter?expand=scores,license," \
-                        "trace_breakdown,compliance_policy," \
+                        "trace_breakdown,modules,compliance_policy," \
                         "production_protected," \
                         "skip_links&filterText=&includeArchived=false" \
                         "&includeMerged=true&limit=%d&offset=%d"
@@ -1388,7 +1457,9 @@ class controller:
         filename = self.outputpath + '/ApplicationTraceBreakdown.csv'
         filewriter = open(filename, 'w+')
 
-        app_severity_breakdown_header = "Application Name,Critical,High,Medium,Low,Note,Reported,Suspicious,Confirmed,Remediated,Not A Problem,Fixed,Grade,First Seen,Time Last Seen,License Level,Time Licensed\n"
+        app_severity_breakdown_header = "Application Name,Critical,High,Medium,Low,Note,Reported,Suspicious," \
+                                        "Confirmed,Remediated,Not A Problem,Fixed,Grade,First Seen,Time Last Seen," \
+                                        "License Level,Time Licensed\n "
         app_linetowrite = [app_severity_breakdown_header]
 
         for application in applications['applications']:
@@ -1465,6 +1536,91 @@ class controller:
                 untagged_applications.append(application['name'])
         return untagged_applications
 
+    def LibraryMetrics(self):
+        print("\nGetting Library Metrics")
+        # libraries = self.getLibraries()
+        self.writeVulnerableLibraries()
+
+    def getLibraries(self):
+        endpoint = "/libraries"
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+
+        r = requests.get(url=url, headers=self.header, stream=True)
+        libraries = json.loads(r.text)
+
+        if libraries['success'] is True:
+            print("\t- Found %d libraries" % libraries['libraries'].__len__())
+            return libraries
+        else:
+            print("Unable to retrieve libraries. Please check the connection details.")
+            return -1
+
+    def writeVulnerableLibraries(self):
+        endpoint = "/libraries/filter?expand=skip_links&q=&quickFilter=VULNERABLE&sort=score"
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+
+        r = requests.get(url=url, headers=self.header)
+        vulnerable_libraries = json.loads(r.text)
+
+        file_to_write = self.outputpath + "/VulnerableLibraries.csv"
+        filewriter = open(file_to_write, 'w+')
+
+        file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
+                      "CVE IDs,Applications," \
+                      "Users\n "
+        library_lines = [file_header]
+        all_applications = {}
+
+        if vulnerable_libraries['success'] is True:
+            print("\t- Found %d vulnerable libraries! Parsing..." % vulnerable_libraries['count'])
+            if vulnerable_libraries['count'] > 0:
+                for count, library in enumerate(vulnerable_libraries['libraries']):
+                    library_hash = library['hash']
+                    if library['app_language'] == "Java":
+                        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/java/" + library_hash + \
+                              "?expand=apps,vulns,skip_link "
+                    if library['app_language'] == ".NET":
+                        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/dotnet/" + library_hash + \
+                              "?expand=apps,vulns,skip_link "
+                    if library['app_language'] == "Node":
+                        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/node/" + library_hash + \
+                              "?expand=apps,vulns,skip_link "
+                    r = requests.get(url=url, headers=self.header)
+                    library_details = json.loads(r.text)
+                    if library_details['success'] is True:
+                        line_to_write = library_details['library']['app_language'] + ',' + \
+                                        library_details['library']['file_name'] + ',' + \
+                                        str(library_details['library']['months_outdated']) + ',' + \
+                                        str(library_details['library']['vulns'].__len__()) + ',' + \
+                                        str(library_details['library']['high_vulnerabilities']) + ','
+                        for vuln in library_details['library']['vulns']:
+                            line_to_write += vuln['name'] + ' // '
+                        line_to_write += ','
+
+                        for app in library_details['library']['apps']:
+                            line_to_write += app['name'] + " // "
+                        line_to_write += ','
+
+                        for app in library_details['library']['apps']:
+                            if all_applications.__len__() > 0:
+                                if app['name'] not in all_applications.keys():
+                                    users_list = self.getUsersInGroups(applications=[app['name']], return_object="list")
+                                    all_applications[app['name']] = users_list[app['name']]
+                            else:
+                                users_list = self.getUsersInGroups(applications=[app['name']], return_object="list")
+                                all_applications[app['name']] = users_list[app['name']]
+                            users_in_app = all_applications[app['name']]
+                            for user in users_in_app:
+                                line_to_write += user + ' // '
+                        line_to_write += ','
+
+                    line_to_write += "\n"
+                    library_lines.append(line_to_write)
+
+        for line in library_lines:
+            filewriter.write(line)
+        filewriter.close()
+
     def test(self):
         a = datetime(2017, 12, 1, 0, 0, 0, 0)
         b = (a - timedelta(hours=3)).timestamp()
@@ -1519,17 +1675,19 @@ class controller:
 
 controller = controller()
 # controller.getServersWithNoApplications()
-# controller.getUsersNotLoggedInDays(days=30)
+# controller.getUsersNotLoggedInDays(days=90)
 # controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-# controller.dateTrendManager()
-# controller.getUsersInTaggedApplications()
-controller.ApplicationMetrics()
+
+# controller.ApplicationMetrics()
+# controller.UsageMetrics(days=365)
+# controller.VulnerabilityTrendMetrics(application_metrics=True)
+controller.LibraryMetrics()
+
 # Note this function requires: "pip3 install lxml" prior to generating graphs
 # controller.generatePPT()
-# controller.UsageMetrics(days=28)
-controller.VulnerabilityTrendMetrics()
 # controller.getUsersInTaggedApplications()
 # controller.test()
+# controller.getPercentUsersLoggedIn(365)
