@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timedelta
 import configparser
 import requests
-
+import sys
 
 # - Offline servers
 # - Users who have never logged in
@@ -513,7 +513,7 @@ class controller:
                     linetowrite = app_name + ',' + users + '\n'
                     filewriter.write(linetowrite)
                 filewriter.close()
-            print("\t- Metrics output to %s" % filename)
+            # print("\t- Metrics output to %s" % filename)
             if return_object is "list":
                 return app_user_mappings_list
             if return_object is "string":
@@ -1616,6 +1616,9 @@ class controller:
 
                     line_to_write += "\n"
                     library_lines.append(line_to_write)
+
+                    sys.stdout.write("\r%i libraries parsed" % count)
+                    sys.stdout.flush()
 
         for line in library_lines:
             filewriter.write(line)
