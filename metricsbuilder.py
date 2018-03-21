@@ -10,6 +10,7 @@ import configparser
 import requests
 import sys
 
+
 # - Offline servers
 # - Users who have never logged in
 # - Users who have not logged in in ___ days
@@ -379,10 +380,10 @@ class controller:
             filewriter.close()
             print("\t- Metrics written to %s" % filename)
 
-    def getUsersInGroups(self, applications=None, return_object=list):
+    def getUsersInGroups(self, return_object, applications=None):
         """
         Output a list of all users in each group
-        :param return_object: format to return users and applications in. CSV string or a list with every user.
+        :param return_object: format to return users and applications in. Choices are "string" or "list" with every user.
         :param applications: if specified, output a list of all users associated with each application.
         """
         endpoint = "/groups?expand=users,applications,skip_links&offset=0&q=&quickFilter=ALL&sort=name"
@@ -885,116 +886,6 @@ class controller:
             yearlyMetrics[year_index] = monthlyMetrics
         return yearlyMetrics
 
-    # def dateTrendManager_Application(self, printMetrics=True):
-    #     """
-    #     Manages how vulnerabilities are associated with the time they were found
-    #     :param printMetrics:
-    #     :return:
-    #     """
-    #
-    #     # Get the months and days we'll be looking through
-    #     self.getDateRange()
-    #
-    #     yearlyMetrics = {}
-    #
-    #     # Loop through all years
-    #     year_index = self.startingYear
-    #
-    #     # Check if metrics should be pulled for licensed applications only.
-    #     # If true, generate a list of licensed application IDs
-    #     if self.LICENSED_ONLY:
-    #         applications = self.getApplications()
-    #         self.application_licensed_status = self.getApplicationLicenseStatus(applications)
-    #
-    #         # self.startTimeEpoch = int(
-    #         #     datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
-    #         # self.endTimeEpoch = int(
-    #         #     datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
-    #
-    #     # If time range spans multiple years, loop through all months in those years except the ending year
-    #     if year_index < self.endingYear:
-    #         # Loop through all months in  previous years
-    #         starting_month_index = self.startingMonth
-    #         while year_index < self.endingYear:
-    #             monthlyMetrics = {}
-    #             for month_index in range(starting_month_index, 13):
-    #                 month = datetime(year_index, month_index, 1).strftime("%B")
-    #                 endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-    #                 self.startTimeEpoch = int((
-    #                                               datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                                   hours=3)).timestamp()) * 1000
-    #                 self.endTimeEpoch = int((
-    #                                             datetime(year_index, month_index, endingDay, 23, 59, 59,
-    #                                                      99) - timedelta(hours=3)).timestamp()) * 1000
-    #                 print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #                     month, 1, year_index, month, endingDay, year_index))
-    #                 monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for the month
-    #             yearlyMetrics[year_index] = monthlyMetrics
-    #             year_index += 1
-    #             starting_month_index = 1
-    #
-    #         # Loop through all months in the current year except the last month
-    #         monthlyMetrics = {}
-    #         starting_month_index = 1
-    #         for month_index in range(starting_month_index, self.endingMonth):
-    #             month = datetime(year_index, month_index, 1).strftime("%B")
-    #             endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-    #             self.startTimeEpoch = int((
-    #                                           datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                               hours=3)).timestamp()) * 1000
-    #             self.endTimeEpoch = int((
-    #                                         datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
-    #                                             hours=3)).timestamp()) * 1000
-    #             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #                 month, 1, year_index, month, endingDay, year_index))
-    #             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #
-    #         # Get vulns for the last month
-    #         month_index = self.endingMonth
-    #         month = datetime(year_index, month_index, 1).strftime("%B")
-    #         self.startTimeEpoch = int((
-    #                                       datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                           hours=3)).timestamp()) * 1000
-    #         self.endTimeEpoch = int((
-    #                                     datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
-    #                                         hours=3)).timestamp()) * 1000
-    #         print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #             month, 1, year_index, month, self.endingDay, year_index))
-    #         monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #         yearlyMetrics[year_index] = monthlyMetrics
-    #
-    #     else:
-    #
-    #         # If the starting year and ending year are the same, loop through all months except the last month
-    #         monthlyMetrics = {}
-    #         for month_index in range(self.startingMonth, self.endingMonth):
-    #             month = datetime(year_index, month_index, 1).strftime("%B")
-    #             endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-    #             self.startTimeEpoch = int((
-    #                                           datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                               hours=3)).timestamp()) * 1000
-    #             self.endTimeEpoch = int((
-    #                                         datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
-    #                                             hours=3)).timestamp()) * 1000
-    #             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #                 month, 1, year_index, month, endingDay, year_index))
-    #             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #
-    #         # Get vuln metrics for the last month
-    #         month_index = self.endingMonth
-    #         month = datetime(year_index, month_index, 1).strftime("%B")
-    #         self.startTimeEpoch = int((
-    #                                       datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                           hours=3)).timestamp()) * 1000
-    #         self.endTimeEpoch = int((
-    #                                     datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
-    #                                         hours=3)).timestamp()) * 1000
-    #         print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #             month, 1, year_index, month, self.endingDay, year_index))
-    #         monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #         yearlyMetrics[year_index] = monthlyMetrics
-    #     return yearlyMetrics
-
     def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, application_metrics, printMetrics):
         cumulative_metrics_filename = self.outputpath + "/CumulativeMetrics.csv"
         cumulative_filewriter = open(cumulative_metrics_filename, 'w+')
@@ -1402,7 +1293,7 @@ class controller:
         self.writeApplicationMetrics(applications)
 
     def getUsersInTaggedApplications(self):
-        untagged_applications = self.getApplicationsWithNoTag()
+        untagged_applications = self.getApplicationsWithNoTag(search_tag_text="BU:")
         self.getUsersInGroups(applications=untagged_applications)
 
     # Get application metrics (count of applications)
@@ -1504,9 +1395,54 @@ class controller:
                     app_license_status[application['app_id']] = False
         return app_license_status
 
-    def getApplicationsWithNoTag(self):
+    def getApplicationLibraryMetricsByTag(self, search_tag_text):
+
+        print("\nGetting vulnerable libraries for tagged applications\n\t- Searching for tag: '%s'" % search_tag_text)
+        tags = self.getAllApplicationTags(filterText=search_tag_text)
+        print("\t\t- Found %d tags which match filter text" % tags.__len__())
+
+        taggedApplication_library_mappings = {}
+        print("\t- Getting applications for each tag")
+        for tag in tags:
+            tagged_applications = self.getApplicationsWithTag(search_tag_text=tag)
+            taggedApplication_library_mappings[tag] = tagged_applications
+
+        print("\t- Getting vulnerable libraries for each application")
+        for tag, apps in taggedApplication_library_mappings.items():
+            for app in apps:
+                app_id = app['app_id']
+                vulnerable_libraries = self.getVulnerableLibraries_Application(app_id=app_id)
+                app.update({"libraries": vulnerable_libraries})
+                if vulnerable_libraries is not 0:
+                    app_libraries = app['libraries']
+                    for app_library in app_libraries:
+                        library_vulns = self.getLibraryCVEs(library_hash=app_library['hash'],
+                                                            library_language=app_library['app_language'])
+                        app_library.update({'vulns': library_vulns})
+
+        print(tagged_applications.__len__())
+
+    def writeApplicationLibraryMetricsByTag(self, tagged_apps_vulnerable_libs):
+        header = "Tag,Application Name,"
+
+    def getAllApplicationTags(self, filterText=None):
+        endpoint = "/applications/filters/tags/listing?expand=skip_links&filterText=&includeArchived=false&quickFilter=ALL"
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+
+        r = requests.get(url=url, headers=self.header)
+        all_tags = json.loads(r.text)
+
+        if filterText is not None:
+            filter_tags = []
+            for filter in all_tags['filters']:
+                if filter['label'].find(filterText) is not -1:
+                    filter_tags.append(filter['label'])
+            return filter_tags
+        else:
+            return all_tags
+
+    def getApplicationsWithNoTag(self, search_tag_text):
         # Text to search tags with
-        search_text = "BU:"
         endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
         url = self.TEAMSERVER_URL + endpoint
 
@@ -1524,7 +1460,7 @@ class controller:
             tags = application['tags']
             try:
                 for tag in tags:
-                    datatag = tag.find(search_text)
+                    datatag = tag.find(search_tag_text)
                     if datatag is not -1:
                         tagged = True
             except:
@@ -1536,10 +1472,65 @@ class controller:
                 untagged_applications.append(application['name'])
         return untagged_applications
 
+    def getApplicationsWithTag(self, search_tag_text):
+        # Text to search tags with
+        endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
+        url = self.TEAMSERVER_URL + endpoint
+
+        response = requests.get(url=url, headers=self.header, stream=True)
+        jsonreader = json.loads(response.text)
+
+        applications = jsonreader['applications']
+        app_count = 0
+        untagged_applications = []
+        for application in applications:
+            tagged = False
+            tags = application['tags']
+            try:
+                for tag in tags:
+                    datatag = tag.find(search_tag_text)
+                    if datatag is not -1:
+                        tagged = True
+            except:
+                # print(application['name'])
+                pass
+            if tagged:
+                app_count += 1
+                # print(str(app_count) + ". " + application['name'])
+                untagged_applications.append({'name': application['name'], 'app_id': application['app_id']})
+        return untagged_applications
+
+    def getVulnerableLibraries_Application(self, app_id):
+        endpoint = "/applications/%s/libraries/filter?expand=apps,quickFilters," \
+                   "skip_links&q=&quickFilter=VULNERABLE&sort=score" % app_id
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+
+        r = requests.get(url=url, headers=self.header)
+        app_vulnerable_libs = json.loads(r.text)
+        if app_vulnerable_libs['count'] == 0:
+            return 0
+        else:
+            return app_vulnerable_libs['libraries']
+
+    def getLibraryCVEs(self, library_hash, library_language):
+        print(library_hash)
+        if library_language == "Java":
+            url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/java/" + library_hash + \
+                  "?expand=apps,vulns,skip_link "
+        if library_language == ".NET":
+            url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/dotnet/" + library_hash + \
+                  "?expand=apps,vulns,skip_link "
+        if library_language == "Node":
+            url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/node/" + library_hash + \
+                  "?expand=apps,vulns,skip_link "
+        r = requests.get(url=url, headers=self.header)
+        library_details = json.loads(r.text)
+        return library_details['library']['vulns']
+
     def LibraryMetrics(self):
         print("\nGetting Library Metrics")
         # libraries = self.getLibraries()
-        self.writeVulnerableLibraries()
+        self.writeVulnerableLibraries(includeApplications=False)
 
     def getLibraries(self):
         endpoint = "/libraries"
@@ -1555,7 +1546,7 @@ class controller:
             print("Unable to retrieve libraries. Please check the connection details.")
             return -1
 
-    def writeVulnerableLibraries(self):
+    def writeVulnerableLibraries(self, includeApplications=True):
         endpoint = "/libraries/filter?expand=skip_links&q=&quickFilter=VULNERABLE&sort=score"
         url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
 
@@ -1565,9 +1556,13 @@ class controller:
         file_to_write = self.outputpath + "/VulnerableLibraries.csv"
         filewriter = open(file_to_write, 'w+')
 
-        file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
-                      "CVE IDs,Applications," \
-                      "Users\n "
+        if includeApplications:
+            file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
+                          "CVE IDs,Applications,Users\n"
+        else:
+            file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
+                          "CVE IDs\n"
+
         library_lines = [file_header]
         all_applications = {}
 
@@ -1597,27 +1592,29 @@ class controller:
                             line_to_write += vuln['name'] + ' // '
                         line_to_write += ','
 
-                        for app in library_details['library']['apps']:
-                            line_to_write += app['name'] + " // "
-                        line_to_write += ','
+                        if includeApplications:
+                            for app in library_details['library']['apps']:
+                                line_to_write += app['name'] + " // "
+                            line_to_write += ','
 
-                        for app in library_details['library']['apps']:
-                            if all_applications.__len__() > 0:
-                                if app['name'] not in all_applications.keys():
+                            for app in library_details['library']['apps']:
+                                if all_applications.__len__() > 0:
+                                    if app['name'] not in all_applications.keys():
+                                        users_list = self.getUsersInGroups(applications=[app['name']],
+                                                                           return_object="list")
+                                        all_applications[app['name']] = users_list[app['name']]
+                                else:
                                     users_list = self.getUsersInGroups(applications=[app['name']], return_object="list")
                                     all_applications[app['name']] = users_list[app['name']]
-                            else:
-                                users_list = self.getUsersInGroups(applications=[app['name']], return_object="list")
-                                all_applications[app['name']] = users_list[app['name']]
-                            users_in_app = all_applications[app['name']]
-                            for user in users_in_app:
-                                line_to_write += user + ' // '
-                        line_to_write += ','
+                                users_in_app = all_applications[app['name']]
+                                for user in users_in_app:
+                                    line_to_write += user + ' // '
+                            line_to_write += ','
 
                     line_to_write += "\n"
                     library_lines.append(line_to_write)
 
-                    sys.stdout.write("\r%i libraries parsed" % count)
+                    sys.stdout.write("\r\t\t%i libraries parsed" % (count + 1))
                     sys.stdout.flush()
 
         for line in library_lines:
@@ -1630,14 +1627,85 @@ class controller:
         print(a)
         print(b)
 
+    def getTotalLicenses(self):
+
+        endpoint = self.ORGANIZATION_ID + "/organizations/stats/licenses?expand=skip_links"
+
+        url = self.TEAMSERVER_URL + endpoint
+        try:
+            response = requests.get(url=url, headers=self.header, stream=True)
+            jsonreader = json.loads(response.text)
+            # print (response.text)
+
+            return_value = {}
+            return_value['protect'] = jsonreader['total_protection']
+            return_value['assess'] = jsonreader['total_assessment']
+
+            # print (return_value)
+
+            return return_value
+
+        except Exception as e:
+            print("ERROR: Unable to retrieve license info")
+            print(e)
+            print(response.text)
+
+    def getLicenseHistory(self):
+
+        endpoint = self.ORGANIZATION_ID + "/organizations/stats/licenses/history?expand=skip_links"
+
+        url = self.TEAMSERVER_URL + endpoint
+        try:
+            response = requests.get(url=url, headers=self.header, stream=True)
+            jsonreader = json.loads(response.text)
+            # print (response.text)
+            return jsonreader['license_history']
+        except Exception as e:
+            print("ERROR: Unable to retrieve license history")
+            print(e)
+            print(response.text)
+
+    def writeLicenseHistory(self, license_history):
+
+        licenses = self.getTotalLicenses()
+
+        filename = self.outputpath + '/LicenseHistory.csv'
+        filewriter = open(filename, 'w+')
+
+        license_history_header = "Timestamp, Assess, Assess Available, Protect, Protect Available\n"
+        license_history_lines = [license_history_header]
+
+        for datapoint in license_history:
+
+            if datapoint['assess'] is None and datapoint['protect'] is None:
+                continue
+            license_history_linetowrite = ""
+            license_history_linetowrite += str(datetime.fromtimestamp(
+                datapoint['timestamp'] / 1000.0).strftime(
+                '%Y-%m-%d')) + ','
+            # if licenses['assess'] != 0:
+            license_history_linetowrite += str(datapoint['assess']) + ','
+            license_history_linetowrite += str(licenses['assess']) + ','
+            license_history_linetowrite += str(datapoint['protect']) + ','
+            license_history_linetowrite += str(licenses['protect']) + '\n'
+            license_history_lines.append(license_history_linetowrite)
+
+        for line in license_history_lines:
+            filewriter.write(line)
+
+        filewriter.close()
+
     # Note this function requires: "pip3 install lxml" prior to generating graphs, also run
     # ApplicationMetrics() first
     def generatePPT(self):
         from pptx import Presentation
         from pptx.chart.data import ChartData
         from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.enum.chart import XL_LEGEND_POSITION
         from pptx.util import Inches
         prs = Presentation("CBRTemplate.pptx")
+
+        print("Generating PPT")
 
         slide = prs.slides.add_slide(prs.slide_layouts[9])
         title_placeholder = slide.shapes.title
@@ -1648,7 +1716,7 @@ class controller:
         categories = []
         criticals = []
         highs = []
-        with open('ApplicationTraceBreakdown.csv') as csvDataFile:
+        with open(self.outputpath + '/ApplicationTraceBreakdown.csv') as csvDataFile:
             csvReader = csv.reader(csvDataFile)
             next(csvReader, None)
             for row in csvReader:
@@ -1663,17 +1731,54 @@ class controller:
         chart_data.add_series('High Vulnerabilities', highs)
 
         # add chart to slide --------------------
-        x, y, cx, cy = Inches(2), Inches(1), Inches(10), Inches(6)
+        x, y, cx, cy = Inches(2), Inches(1.05), Inches(10), Inches(6)
         chart = slide.shapes.add_chart(
             XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
-        )
+        ).chart
 
-        # chart.has_legend = True
-        # chart.legend.position = XL_LEGEND_POSITION.RIGHT
-        # chart.legend.include_in_layout = False
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
 
+        self.writeLicenseHistory(self.getLicenseHistory())
 
-        prs.save('CBRTemplate.pptx')
+        slide = prs.slides.add_slide(prs.slide_layouts[9])
+        title_placeholder = slide.shapes.title
+        title_placeholder.text = 'LICENSE ADOPTION'
+
+        dates = []
+        assess = []
+        protect = []
+        assess_available = []
+        protect_available = []
+
+        with open(self.outputpath + '/LicenseHistory.csv') as csvDataFile:
+            csvReader = csv.reader(csvDataFile)
+            next(csvReader, None)
+            for row in csvReader:
+                dates.append(row[0])
+                assess.append(row[1])
+                assess_available.append(row[2])
+                protect.append(row[3])
+                protect_available.append(row[4])
+
+                # define chart data ---------------------
+        chart_data = ChartData()
+        chart_data.categories = dates
+        chart_data.add_series('Assess Available', assess_available)
+        chart_data.add_series('Protect Available', protect_available)
+        chart_data.add_series('Assess', assess)
+        chart_data.add_series('Protect', protect)
+        x, y, cx, cy = Inches(1), Inches(1.5), Inches(11.5), Inches(5)
+        chart = slide.shapes.add_chart(
+            XL_CHART_TYPE.LINE, x, y, cx, cy, chart_data
+        ).chart
+
+        chart.has_legend = True
+        chart.legend.include_in_layout = False
+        # chart.series[0].smooth = True
+
+        prs.save(self.outputpath + '/CBRTemplate.pptx')
 
 
 controller = controller()
@@ -1687,10 +1792,11 @@ controller = controller()
 # controller.ApplicationMetrics()
 # controller.UsageMetrics(days=365)
 # controller.VulnerabilityTrendMetrics(application_metrics=True)
-controller.LibraryMetrics()
+# controller.LibraryMetrics()
 
 # Note this function requires: "pip3 install lxml" prior to generating graphs
 # controller.generatePPT()
 # controller.getUsersInTaggedApplications()
 # controller.test()
 # controller.getPercentUsersLoggedIn(365)
+controller.getApplicationLibraryMetricsByTag(search_tag_text="demo")
