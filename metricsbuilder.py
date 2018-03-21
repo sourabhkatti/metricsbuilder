@@ -1630,14 +1630,89 @@ class controller:
         print(a)
         print(b)
 
+    def getTotalLicenses(self):
+
+        endpoint = self.ORGANIZATION_ID + "/organizations/stats/licenses?expand=skip_links"
+
+        url = self.TEAMSERVER_URL + endpoint
+        try:
+            response = requests.get(url=url, headers=self.header, stream=True)
+            jsonreader = json.loads(response.text)
+            #print (response.text)
+
+            return_value={}
+            return_value['protect'] = jsonreader['total_protection']
+            return_value['assess'] = jsonreader['total_assessment']
+
+            #print (return_value)
+
+            return return_value
+
+        except Exception as e:
+            print("ERROR: Unable to retrieve license info")
+            print(e)
+            print(response.text)
+
+    def getLicenseHistory(self):
+
+        endpoint = self.ORGANIZATION_ID + "/organizations/stats/licenses/history?expand=skip_links"
+
+        url = self.TEAMSERVER_URL + endpoint
+        try:
+            response = requests.get(url=url, headers=self.header, stream=True)
+            jsonreader = json.loads(response.text)
+            #print (response.text)
+            return jsonreader['license_history']
+        except Exception as e:
+            print("ERROR: Unable to retrieve license history")
+            print(e)
+            print(response.text)
+
+
+    def writeLicenseHistory(self,license_history):
+
+
+        licenses = self.getTotalLicenses()
+
+        filename = self.outputpath + '/LicenseHistory.csv'
+        filewriter = open(filename, 'w+')
+
+        license_history_header = "Timestamp, Assess, Assess Available, Protect, Protect Available\n"
+        license_history_lines = [license_history_header]
+
+        for datapoint in license_history:
+
+            if datapoint['assess'] is None and datapoint['protect'] is None:
+                continue
+            license_history_linetowrite = ""
+            license_history_linetowrite += str(datetime.fromtimestamp(
+                datapoint['timestamp'] / 1000.0).strftime(
+                '%Y-%m-%d')) + ','
+            #if licenses['assess'] != 0:
+            license_history_linetowrite += str(datapoint['assess']) + ','
+            license_history_linetowrite += str(licenses['assess']) + ','
+            license_history_linetowrite += str(datapoint['protect']) + ','
+            license_history_linetowrite += str(licenses['protect']) + '\n'
+            license_history_lines.append(license_history_linetowrite)
+
+        for line in license_history_lines:
+            filewriter.write(line)
+
+        filewriter.close()
+
+
+
     # Note this function requires: "pip3 install lxml" prior to generating graphs, also run
     # ApplicationMetrics() first
     def generatePPT(self):
         from pptx import Presentation
         from pptx.chart.data import ChartData
         from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.enum.chart import XL_LEGEND_POSITION
         from pptx.util import Inches
         prs = Presentation("CBRTemplate.pptx")
+
+        print("Generating PPT")
 
         slide = prs.slides.add_slide(prs.slide_layouts[9])
         title_placeholder = slide.shapes.title
@@ -1648,7 +1723,7 @@ class controller:
         categories = []
         criticals = []
         highs = []
-        with open('ApplicationTraceBreakdown.csv') as csvDataFile:
+        with open(self.outputpath + '/ApplicationTraceBreakdown.csv') as csvDataFile:
             csvReader = csv.reader(csvDataFile)
             next(csvReader, None)
             for row in csvReader:
@@ -1663,17 +1738,54 @@ class controller:
         chart_data.add_series('High Vulnerabilities', highs)
 
         # add chart to slide --------------------
-        x, y, cx, cy = Inches(2), Inches(1), Inches(10), Inches(6)
+        x, y, cx, cy = Inches(2), Inches(1.05), Inches(10), Inches(6)
         chart = slide.shapes.add_chart(
             XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
-        )
+        ).chart
 
-        # chart.has_legend = True
-        # chart.legend.position = XL_LEGEND_POSITION.RIGHT
-        # chart.legend.include_in_layout = False
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
 
+        self.writeLicenseHistory(self.getLicenseHistory())
 
-        prs.save('CBRTemplate.pptx')
+        slide = prs.slides.add_slide(prs.slide_layouts[9])
+        title_placeholder = slide.shapes.title
+        title_placeholder.text = 'LICENSE ADOPTION'
+
+        dates = []
+        assess = []
+        protect = []
+        assess_available = []
+        protect_available = []
+
+        with open(self.outputpath + '/LicenseHistory.csv') as csvDataFile:
+            csvReader = csv.reader(csvDataFile)
+            next(csvReader, None)
+            for row in csvReader:
+                dates.append(row[0])
+                assess.append(row[1])
+                assess_available.append(row[2])
+                protect.append(row[3])
+                protect_available.append(row[4])
+
+            # define chart data ---------------------
+        chart_data = ChartData()
+        chart_data.categories = dates
+        chart_data.add_series('Assess Available', assess_available)
+        chart_data.add_series('Protect Available', protect_available)
+        chart_data.add_series('Assess', assess)
+        chart_data.add_series('Protect', protect)
+        x, y, cx, cy = Inches(1), Inches(1.5), Inches(11.5), Inches(5)
+        chart = slide.shapes.add_chart(
+            XL_CHART_TYPE.LINE, x, y, cx, cy, chart_data
+        ).chart
+
+        chart.has_legend = True
+        chart.legend.include_in_layout = False
+        #chart.series[0].smooth = True
+
+        prs.save(self.outputpath + '/CBRTemplate.pptx')
 
 
 controller = controller()
@@ -1684,13 +1796,13 @@ controller = controller()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
 
-# controller.ApplicationMetrics()
+controller.ApplicationMetrics()
 # controller.UsageMetrics(days=365)
-# controller.VulnerabilityTrendMetrics(application_metrics=True)
-controller.LibraryMetrics()
+controller.VulnerabilityTrendMetrics(application_metrics=True)
+#controller.LibraryMetrics()
 
 # Note this function requires: "pip3 install lxml" prior to generating graphs
-# controller.generatePPT()
+controller.generatePPT()
 # controller.getUsersInTaggedApplications()
 # controller.test()
 # controller.getPercentUsersLoggedIn(365)
