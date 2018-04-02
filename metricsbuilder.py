@@ -1,14 +1,15 @@
 import argparse
 import base64
 import calendar
+import configparser
 import csv
 import json
 import os
 import re
-from datetime import datetime, timedelta
-import configparser
-import requests
 import sys
+from datetime import datetime, timedelta
+
+import requests
 
 
 # - Offline servers
@@ -33,13 +34,13 @@ class controller:
     application_licensed_status = {}
 
     # Starting date
-    startingMonth = 6
+    startingMonth = 3
     startingDay = 1
     startingYear = 2017
 
     # Ending date
     endingMonth = 3
-    endingDay = 13
+    endingDay = 31
     endingYear = 2018
 
     ####################################################################
@@ -1069,7 +1070,7 @@ class controller:
             # Get all vulns which need an issue opened for them
             r = requests.get(url=endpoint, headers=self.header)
 
-            if r.status_code == 504:
+            if r.status_code == 504 or r.status_code == 502:
                 limit = 100
                 endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
                                                                         "/filter/?endDate=" + str(
@@ -1106,7 +1107,7 @@ class controller:
                 return self.getVulnMetrics(vulns['traces'])
 
         except Exception as e:
-            print("ERROR: Unable to connect to teamserver. Please check your authentication details.")
+            print("\n!! ERROR: Unable to connect to teamserver. Please check your authentication details.")
             print(e)
             return {}
 
@@ -1635,78 +1636,6 @@ class controller:
         try:
             response = requests.get(url=url, headers=self.header, stream=True)
             jsonreader = json.loads(response.text)
-            #print (response.text)
-
-            return_value={}
-            return_value['protect'] = jsonreader['total_protection']
-            return_value['assess'] = jsonreader['total_assessment']
-
-            #print (return_value)
-
-            return return_value
-
-        except Exception as e:
-            print("ERROR: Unable to retrieve license info")
-            print(e)
-            print(response.text)
-
-    def getLicenseHistory(self):
-
-        endpoint = self.ORGANIZATION_ID + "/organizations/stats/licenses/history?expand=skip_links"
-
-        url = self.TEAMSERVER_URL + endpoint
-        try:
-            response = requests.get(url=url, headers=self.header, stream=True)
-            jsonreader = json.loads(response.text)
-            #print (response.text)
-            return jsonreader['license_history']
-        except Exception as e:
-            print("ERROR: Unable to retrieve license history")
-            print(e)
-            print(response.text)
-
-
-    def writeLicenseHistory(self,license_history):
-
-
-        licenses = self.getTotalLicenses()
-
-        filename = self.outputpath + '/LicenseHistory.csv'
-        filewriter = open(filename, 'w+')
-
-        license_history_header = "Timestamp, Assess, Assess Available, Protect, Protect Available\n"
-        license_history_lines = [license_history_header]
-
-        for datapoint in license_history:
-
-            if datapoint['assess'] is None and datapoint['protect'] is None:
-                continue
-            license_history_linetowrite = ""
-            license_history_linetowrite += str(datetime.fromtimestamp(
-                datapoint['timestamp'] / 1000.0).strftime(
-                '%Y-%m-%d')) + ','
-            #if licenses['assess'] != 0:
-            license_history_linetowrite += str(datapoint['assess']) + ','
-            license_history_linetowrite += str(licenses['assess']) + ','
-            license_history_linetowrite += str(datapoint['protect']) + ','
-            license_history_linetowrite += str(licenses['protect']) + '\n'
-            license_history_lines.append(license_history_linetowrite)
-
-        for line in license_history_lines:
-            filewriter.write(line)
-
-        filewriter.close()
-
-
-
-    def getTotalLicenses(self):
-
-        endpoint = self.ORGANIZATION_ID + "/organizations/stats/licenses?expand=skip_links"
-
-        url = self.TEAMSERVER_URL + endpoint
-        try:
-            response = requests.get(url=url, headers=self.header, stream=True)
-            jsonreader = json.loads(response.text)
             # print (response.text)
 
             return_value = {}
@@ -1834,43 +1763,6 @@ class controller:
                 protect.append(row[3])
                 protect_available.append(row[4])
 
-            # define chart data ---------------------
-        chart_data = ChartData()
-        chart_data.categories = dates
-        chart_data.add_series('Assess Available', assess_available)
-        chart_data.add_series('Protect Available', protect_available)
-        chart_data.add_series('Assess', assess)
-        chart_data.add_series('Protect', protect)
-        x, y, cx, cy = Inches(1), Inches(1.5), Inches(11.5), Inches(5)
-        chart = slide.shapes.add_chart(
-            XL_CHART_TYPE.LINE, x, y, cx, cy, chart_data
-        ).chart
-
-        chart.has_legend = True
-        chart.legend.include_in_layout = False
-        #chart.series[0].smooth = True
-
-        prs.save(self.outputpath + '/CBRTemplate.pptx')
-        slide = prs.slides.add_slide(prs.slide_layouts[9])
-        title_placeholder = slide.shapes.title
-        title_placeholder.text = 'LICENSE ADOPTION'
-
-        dates = []
-        assess = []
-        protect = []
-        assess_available = []
-        protect_available = []
-
-        with open(self.outputpath + '/LicenseHistory.csv') as csvDataFile:
-            csvReader = csv.reader(csvDataFile)
-            next(csvReader, None)
-            for row in csvReader:
-                dates.append(row[0])
-                assess.append(row[1])
-                assess_available.append(row[2])
-                protect.append(row[3])
-                protect_available.append(row[4])
-
                 # define chart data ---------------------
         chart_data = ChartData()
         chart_data.categories = dates
@@ -1891,21 +1783,30 @@ class controller:
 
 
 controller = controller()
+
+##### General metrics
 # controller.getServersWithNoApplications()
 # controller.getUsersNotLoggedInDays(days=90)
 # controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-
-controller.ApplicationMetrics()
 # controller.UsageMetrics(days=365)
+# controller.getPercentUsersLoggedIn(365)
+# controller.getUsersInTaggedApplications()
+
+##### Application metrics
+# controller.ApplicationMetrics()
+
+##### Vulnerability metrics
 controller.VulnerabilityTrendMetrics(application_metrics=True)
-#controller.LibraryMetrics()
+
+##### Library metrics
+controller.LibraryMetrics()
+# controller.getApplicationLibraryMetricsByTag(search_tag_text="demo")
 
 # Note this function requires: "pip3 install lxml" prior to generating graphs
-controller.generatePPT()
-# controller.getUsersInTaggedApplications()
+# controller.generatePPT()
+
 # controller.test()
-# controller.getPercentUsersLoggedIn(365)
-controller.getApplicationLibraryMetricsByTag(search_tag_text="demo")
+
