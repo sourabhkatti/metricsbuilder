@@ -12,39 +12,14 @@ from datetime import datetime, timedelta
 import requests
 
 
-# - Offline servers
-# - Users who have never logged in
-# - Users who have not logged in in ___ days
-# - Apps that are not associated with a group
-# - Servers with no apps
-# - All groups and users contained within them
-# - Export the audit log into a csv
-
-
 class controller:
     ####################################################################
     #  Location of properties with connection details to the Contrast UI
     properties_file = "script.properties"
 
     header = {}
-
-    FOUND_DATE = "FIRST"
-    SORTING = "ALL"
-    LICENSED_ONLY = False
     application_licensed_status = {}
 
-    # Starting date
-    startingMonth = 3
-    startingDay = 1
-    startingYear = 2017
-
-    # Ending date
-    endingMonth = 3
-    endingDay = 31
-    endingYear = 2018
-
-    ####################################################################
-    # DO NOT CONFIGURE
     endTimeEpoch = 0
     startTimeEpoch = 0
     header = {}
@@ -55,6 +30,7 @@ class controller:
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
 
+        parser.add_argument("-c", help="Specify the path to the scripts.properties file", nargs=1, type=str, metavar="")
         parser.add_argument("-o", help='Specify the path to write text files to', nargs=1,
                             type=str, metavar="")
         parser.add_argument("-i", help='Specify the organization ID', nargs=1,
@@ -67,18 +43,41 @@ class controller:
                             type=str, metavar="")
         parser.add_argument("-u", help='Specify the Username', nargs=1,
                             type=str, metavar="")
+        parser.add_argument("--LibraryMetrics", help="Retrieve library metrics", action='store_true')
+        parser.add_argument("--VulnerabilityMetrics", help='Retrieve trending vulnerability metrics',
+                            action='store_true')
+        parser.add_argument("--ApplicationMetrics", help="Retrieve application metrics", action='store_true')
 
         argt = parser.parse_args()
+
         if argt.o:
             self.outputpath = argt.o[0]
         else:
             self.outputpath = os.getcwd()
+        if argt.c:
+            self.properties_file = argt.c[0]
+        else:
+            self.properties_file = "script.properties"
+
+        self.getScriptConfiguration()
         print("Writing output to", self.outputpath)
 
-        self.getTeamserverConnection()
+        if argt.VulnerabilityMetrics:
+            self.VulnerabilityTrendMetrics(application_metrics=True)
+        if argt.ApplicationMetrics:
+            self.ApplicationMetrics()
+        if argt.LibraryMetrics:
+            self.LibraryMetrics()
+
+        if "LibraryMetrics" in sys.argv:
+            self.LibraryMetrics()
+        if "ApplicationMetrics" in sys.argv:
+            self.ApplicationMetrics()
+        if "VulnerabilityMetrics" in sys.argv:
+            self.VulnerabilityTrendMetrics(application_metrics=True)
 
     # noinspection PyShadowingBuiltins
-    def getTeamserverConnection(self):
+    def getScriptConfiguration(self):
         """
         Open properties file and set the Contrast UI connection details
         """
@@ -106,6 +105,44 @@ class controller:
             self.TEAMSERVER_URL = cfp.get("Contrast UI Details", "contrast.teamserver.url")
         except:
             print("Please specify contrast.teamserver.url in the script.properties")
+
+        try:
+            self.FOUND_DATE = cfp.get("Vulnerability Trend Configuration", "found.date")
+        except:
+            print("Please specify found.date in the script.properties")
+        try:
+            self.SORTING = cfp.get("Vulnerability Trend Configuration", "sorting.method")
+        except:
+            print("Please specify sorting.method in the script.properties")
+        try:
+            self.LICENSED_ONLY = cfp.get("Vulnerability Trend Configuration", "licensed.only") in ["True", 'true']
+        except:
+            print("Please specify licensed.only in the script.properties")
+
+        try:
+            self.startingMonth = int(cfp.get("Vulnerability Trend Duration", "starting.month"))
+        except:
+            print("Please specify starting.month in the script.properties")
+        try:
+            self.startingYear = int(cfp.get("Vulnerability Trend Duration", "starting.year"))
+        except:
+            print("Please specify starting.year in the script.properties")
+        try:
+            self.startingDay = int(cfp.get("Vulnerability Trend Duration", "starting.day"))
+        except:
+            print("Please specify starting.day in the script.properties")
+        try:
+            self.endingMonth = int(cfp.get("Vulnerability Trend Duration", "ending.month"))
+        except:
+            print("Please specify ending.month in the script.properties")
+        try:
+            self.endingDay = int(cfp.get("Vulnerability Trend Duration", "ending.day"))
+        except:
+            print("Please specify ending.day in the script.properties")
+        try:
+            self.endingYear = int(cfp.get("Vulnerability Trend Duration", "ending.year"))
+        except:
+            print("Please specify ending.year in the script.properties")
 
         self.AUTHORIZATION = base64.b64encode((self.USERNAME + ':' + self.SERVICE_KEY).encode('utf-8'))
         self.header = {
@@ -205,7 +242,7 @@ class controller:
         """
 
         if days < -1:
-            print("\n* * The number of days must be greater than 0")
+            print("\n** The number of days must be greater than 0")
 
         else:
             endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
@@ -1057,54 +1094,37 @@ class controller:
             "Fetch Vulnerabilities, sorting by " + self.SORTING + " and " + self.FOUND_DATE +
             " found in the date range...")
 
-        endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
-                                                                "/filter/?endDate=" + str(
-            self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                 "skip_links&quickFilter=" + self.SORTING + \
-                   "&limit=100000&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
-                   "&timestampFilter=" + self.FOUND_DATE
-
-        print("\tSending request to teamserver", end="")
-
         try:
             # Get all vulns which need an issue opened for them
-            r = requests.get(url=endpoint, headers=self.header)
+            limit = 200
+            endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                    "/filter/?endDate=" + str(
+                self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                     "skip_links&quickFilter=" + self.SORTING + \
+                       ("&limit=%d&sort=-lastTimeSeen&startDate=" % limit) + str(self.startTimeEpoch) + \
+                       "&timestampFilter=" + self.FOUND_DATE
 
-            if r.status_code == 504 or r.status_code == 502:
-                limit = 100
-                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
-                                                                        "/filter/?endDate=" + str(
-                    self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                         "skip_links&quickFilter=" + self.SORTING + \
-                           "&limit=100&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
+            r = requests.get(url=endpoint, headers=self.header)
+            vulns = json.loads(r.text)
+            vuln_count = vulns['count']
+            print("\t- Number of vulns:", vuln_count)
+
+            for offset in range(limit, vuln_count, limit):
+
+                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces/filter/?endDate=" + \
+                           str(self.endTimeEpoch) + \
+                           "&expand=application,servers,violations,bugtracker,skip_links&quickFilter=" + \
+                           self.SORTING + ("&limit=%d&offset=%d" % (limit, offset)) + \
+                           "&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
                            "&timestampFilter=" + self.FOUND_DATE
 
                 r = requests.get(url=endpoint, headers=self.header)
-                vulns = json.loads(r.text)
-                vuln_count = vulns['count']
-                print("\t- Number of vulns:", vuln_count)
-
-                for offset in range(limit, vuln_count, limit):
-
-                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces/filter/?endDate=" + \
-                               str(self.endTimeEpoch) + \
-                               "&expand=application,servers,violations,bugtracker,skip_links&quickFilter=" + \
-                               self.SORTING + ("&limit=%d&offset=%d" % (limit, offset)) + \
-                               "&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
-                               "&timestampFilter=" + self.FOUND_DATE
-
-                    r = requests.get(url=endpoint, headers=self.header)
-                    next_vulns = json.loads(r.text)
-                    for vuln in next_vulns['traces']:
-                        vulns['traces'].append(vuln)
-                    print("\t\tVulns picked up: ", offset)
-
-                return self.getVulnMetrics(vulns['traces'])
-            else:
-
-                vulns = json.loads(r.text)
-                print(".... Done!")
-                return self.getVulnMetrics(vulns['traces'])
+                next_vulns = json.loads(r.text)
+                for vuln in next_vulns['traces']:
+                    vulns['traces'].append(vuln)
+                print("\t\tVulns picked up: ", offset)
+            print("\t\tVulns picked up: ", vulns['traces'].__len__())
+            return self.getVulnMetrics(vulns['traces'])
 
         except Exception as e:
             print("\n!! ERROR: Unable to connect to teamserver. Please check your authentication details.")
@@ -1799,14 +1819,13 @@ controller = controller()
 # controller.ApplicationMetrics()
 
 ##### Vulnerability metrics
-controller.VulnerabilityTrendMetrics(application_metrics=True)
+# controller.VulnerabilityTrendMetrics(application_metrics=True)
 
 ##### Library metrics
-controller.LibraryMetrics()
+# controller.LibraryMetrics()
 # controller.getApplicationLibraryMetricsByTag(search_tag_text="demo")
 
 # Note this function requires: "pip3 install lxml" prior to generating graphs
 # controller.generatePPT()
 
 # controller.test()
-
