@@ -1,22 +1,15 @@
 import argparse
 import base64
 import calendar
+import configparser
 import csv
 import json
 import os
 import re
-from datetime import datetime, timedelta
-import configparser
-import requests
 import sys
+from datetime import datetime, timedelta
 
-# - Offline servers
-# - Users who have never logged in
-# - Users who have not logged in in ___ days
-# - Apps that are not associated with a group
-# - Servers with no apps
-# - All groups and users contained within them
-# - Export the audit log into a csv
+import requests
 
 
 class controller:
@@ -25,24 +18,8 @@ class controller:
     properties_file = "script.properties"
 
     header = {}
-
-    FOUND_DATE = "FIRST"
-    SORTING = "ALL"
-    LICENSED_ONLY = False
     application_licensed_status = {}
 
-    # Starting date
-    startingMonth = 6
-    startingDay = 1
-    startingYear = 2017
-
-    # Ending date
-    endingMonth = 3
-    endingDay = 13
-    endingYear = 2018
-
-    ####################################################################
-    # DO NOT CONFIGURE
     endTimeEpoch = 0
     startTimeEpoch = 0
     header = {}
@@ -53,6 +30,7 @@ class controller:
     def __init__(self):
         parser = argparse.ArgumentParser(description='Communicate with the Contrast Rest API')
 
+        parser.add_argument("-c", help="Specify the path to the scripts.properties file", nargs=1, type=str, metavar="")
         parser.add_argument("-o", help='Specify the path to write text files to', nargs=1,
                             type=str, metavar="")
         parser.add_argument("-i", help='Specify the organization ID', nargs=1,
@@ -65,18 +43,41 @@ class controller:
                             type=str, metavar="")
         parser.add_argument("-u", help='Specify the Username', nargs=1,
                             type=str, metavar="")
+        parser.add_argument("--LibraryMetrics", help="Retrieve library metrics", action='store_true')
+        parser.add_argument("--VulnerabilityMetrics", help='Retrieve trending vulnerability metrics',
+                            action='store_true')
+        parser.add_argument("--ApplicationMetrics", help="Retrieve application metrics", action='store_true')
 
         argt = parser.parse_args()
+
         if argt.o:
             self.outputpath = argt.o[0]
         else:
             self.outputpath = os.getcwd()
+        if argt.c:
+            self.properties_file = argt.c[0]
+        else:
+            self.properties_file = "script.properties"
+
+        self.getScriptConfiguration()
         print("Writing output to", self.outputpath)
 
-        self.getTeamserverConnection()
+        if argt.VulnerabilityMetrics:
+            self.VulnerabilityTrendMetrics(application_metrics=True)
+        if argt.ApplicationMetrics:
+            self.ApplicationMetrics()
+        if argt.LibraryMetrics:
+            self.LibraryMetrics()
+
+        if "LibraryMetrics" in sys.argv:
+            self.LibraryMetrics()
+        if "ApplicationMetrics" in sys.argv:
+            self.ApplicationMetrics()
+        if "VulnerabilityMetrics" in sys.argv:
+            self.VulnerabilityTrendMetrics(application_metrics=True)
 
     # noinspection PyShadowingBuiltins
-    def getTeamserverConnection(self):
+    def getScriptConfiguration(self):
         """
         Open properties file and set the Contrast UI connection details
         """
@@ -104,6 +105,44 @@ class controller:
             self.TEAMSERVER_URL = cfp.get("Contrast UI Details", "contrast.teamserver.url")
         except:
             print("Please specify contrast.teamserver.url in the script.properties")
+
+        try:
+            self.FOUND_DATE = cfp.get("Vulnerability Trend Configuration", "found.date")
+        except:
+            print("Please specify found.date in the script.properties")
+        try:
+            self.SORTING = cfp.get("Vulnerability Trend Configuration", "sorting.method")
+        except:
+            print("Please specify sorting.method in the script.properties")
+        try:
+            self.LICENSED_ONLY = cfp.get("Vulnerability Trend Configuration", "licensed.only") in ["True", 'true']
+        except:
+            print("Please specify licensed.only in the script.properties")
+
+        try:
+            self.startingMonth = int(cfp.get("Vulnerability Trend Duration", "starting.month"))
+        except:
+            print("Please specify starting.month in the script.properties")
+        try:
+            self.startingYear = int(cfp.get("Vulnerability Trend Duration", "starting.year"))
+        except:
+            print("Please specify starting.year in the script.properties")
+        try:
+            self.startingDay = int(cfp.get("Vulnerability Trend Duration", "starting.day"))
+        except:
+            print("Please specify starting.day in the script.properties")
+        try:
+            self.endingMonth = int(cfp.get("Vulnerability Trend Duration", "ending.month"))
+        except:
+            print("Please specify ending.month in the script.properties")
+        try:
+            self.endingDay = int(cfp.get("Vulnerability Trend Duration", "ending.day"))
+        except:
+            print("Please specify ending.day in the script.properties")
+        try:
+            self.endingYear = int(cfp.get("Vulnerability Trend Duration", "ending.year"))
+        except:
+            print("Please specify ending.year in the script.properties")
 
         self.AUTHORIZATION = base64.b64encode((self.USERNAME + ':' + self.SERVICE_KEY).encode('utf-8'))
         self.header = {
@@ -203,7 +242,7 @@ class controller:
         """
 
         if days < -1:
-            print("\n* * The number of days must be greater than 0")
+            print("\n** The number of days must be greater than 0")
 
         else:
             endpoint = self.ORGANIZATION_ID + "/users?expand=preferences,login,role," \
@@ -379,10 +418,10 @@ class controller:
             filewriter.close()
             print("\t- Metrics written to %s" % filename)
 
-    def getUsersInGroups(self, applications=None, return_object=list):
+    def getUsersInGroups(self, return_object, applications=None):
         """
         Output a list of all users in each group
-        :param return_object: format to return users and applications in. CSV string or a list with every user.
+        :param return_object: format to return users and applications in. Choices are "string" or "list" with every user.
         :param applications: if specified, output a list of all users associated with each application.
         """
         endpoint = "/groups?expand=users,applications,skip_links&offset=0&q=&quickFilter=ALL&sort=name"
@@ -885,116 +924,6 @@ class controller:
             yearlyMetrics[year_index] = monthlyMetrics
         return yearlyMetrics
 
-    # def dateTrendManager_Application(self, printMetrics=True):
-    #     """
-    #     Manages how vulnerabilities are associated with the time they were found
-    #     :param printMetrics:
-    #     :return:
-    #     """
-    #
-    #     # Get the months and days we'll be looking through
-    #     self.getDateRange()
-    #
-    #     yearlyMetrics = {}
-    #
-    #     # Loop through all years
-    #     year_index = self.startingYear
-    #
-    #     # Check if metrics should be pulled for licensed applications only.
-    #     # If true, generate a list of licensed application IDs
-    #     if self.LICENSED_ONLY:
-    #         applications = self.getApplications()
-    #         self.application_licensed_status = self.getApplicationLicenseStatus(applications)
-    #
-    #         # self.startTimeEpoch = int(
-    #         #     datetime.datetime(year_index, month_index, 1, 0, 0, 0, 0).timestamp()) * 1000
-    #         # self.endTimeEpoch = int(
-    #         #     datetime.datetime(year_index, month_index, endingDay, 23, 59, 59, 99).timestamp()) * 1000
-    #
-    #     # If time range spans multiple years, loop through all months in those years except the ending year
-    #     if year_index < self.endingYear:
-    #         # Loop through all months in  previous years
-    #         starting_month_index = self.startingMonth
-    #         while year_index < self.endingYear:
-    #             monthlyMetrics = {}
-    #             for month_index in range(starting_month_index, 13):
-    #                 month = datetime(year_index, month_index, 1).strftime("%B")
-    #                 endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-    #                 self.startTimeEpoch = int((
-    #                                               datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                                   hours=3)).timestamp()) * 1000
-    #                 self.endTimeEpoch = int((
-    #                                             datetime(year_index, month_index, endingDay, 23, 59, 59,
-    #                                                      99) - timedelta(hours=3)).timestamp()) * 1000
-    #                 print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #                     month, 1, year_index, month, endingDay, year_index))
-    #                 monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for the month
-    #             yearlyMetrics[year_index] = monthlyMetrics
-    #             year_index += 1
-    #             starting_month_index = 1
-    #
-    #         # Loop through all months in the current year except the last month
-    #         monthlyMetrics = {}
-    #         starting_month_index = 1
-    #         for month_index in range(starting_month_index, self.endingMonth):
-    #             month = datetime(year_index, month_index, 1).strftime("%B")
-    #             endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-    #             self.startTimeEpoch = int((
-    #                                           datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                               hours=3)).timestamp()) * 1000
-    #             self.endTimeEpoch = int((
-    #                                         datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
-    #                                             hours=3)).timestamp()) * 1000
-    #             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #                 month, 1, year_index, month, endingDay, year_index))
-    #             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #
-    #         # Get vulns for the last month
-    #         month_index = self.endingMonth
-    #         month = datetime(year_index, month_index, 1).strftime("%B")
-    #         self.startTimeEpoch = int((
-    #                                       datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                           hours=3)).timestamp()) * 1000
-    #         self.endTimeEpoch = int((
-    #                                     datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
-    #                                         hours=3)).timestamp()) * 1000
-    #         print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #             month, 1, year_index, month, self.endingDay, year_index))
-    #         monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #         yearlyMetrics[year_index] = monthlyMetrics
-    #
-    #     else:
-    #
-    #         # If the starting year and ending year are the same, loop through all months except the last month
-    #         monthlyMetrics = {}
-    #         for month_index in range(self.startingMonth, self.endingMonth):
-    #             month = datetime(year_index, month_index, 1).strftime("%B")
-    #             endingDay = calendar.monthrange(year_index, month_index)[1]  # Get the number of days in the month
-    #             self.startTimeEpoch = int((
-    #                                           datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                               hours=3)).timestamp()) * 1000
-    #             self.endTimeEpoch = int((
-    #                                         datetime(year_index, month_index, endingDay, 23, 59, 59, 99) - timedelta(
-    #                                             hours=3)).timestamp()) * 1000
-    #             print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #                 month, 1, year_index, month, endingDay, year_index))
-    #             monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #
-    #         # Get vuln metrics for the last month
-    #         month_index = self.endingMonth
-    #         month = datetime(year_index, month_index, 1).strftime("%B")
-    #         self.startTimeEpoch = int((
-    #                                       datetime(year_index, month_index, 1, 0, 0, 0, 0) - timedelta(
-    #                                           hours=3)).timestamp()) * 1000
-    #         self.endTimeEpoch = int((
-    #                                     datetime(year_index, month_index, self.endingDay, 23, 59, 59, 99) - timedelta(
-    #                                         hours=3)).timestamp()) * 1000
-    #         print("\n==========> Getting vulns in between %s %d, %d and %s %d, %d" % (
-    #             month, 1, year_index, month, self.endingDay, year_index))
-    #         monthlyMetrics[month] = self.getVulnsByDate()  # Get vulnerabilities for current month
-    #         yearlyMetrics[year_index] = monthlyMetrics
-    #     return yearlyMetrics
-
     def writeCumulativeMetrics(self, cumulativeMetrics, serious_categories, application_metrics, printMetrics):
         cumulative_metrics_filename = self.outputpath + "/CumulativeMetrics.csv"
         cumulative_filewriter = open(cumulative_metrics_filename, 'w+')
@@ -1165,57 +1094,40 @@ class controller:
             "Fetch Vulnerabilities, sorting by " + self.SORTING + " and " + self.FOUND_DATE +
             " found in the date range...")
 
-        endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
-                                                                "/filter/?endDate=" + str(
-            self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                 "skip_links&quickFilter=" + self.SORTING + \
-                   "&limit=100000&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
-                   "&timestampFilter=" + self.FOUND_DATE
-
-        print("\tSending request to teamserver", end="")
-
         try:
             # Get all vulns which need an issue opened for them
-            r = requests.get(url=endpoint, headers=self.header)
+            limit = 200
+            endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
+                                                                    "/filter/?endDate=" + str(
+                self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
+                                     "skip_links&quickFilter=" + self.SORTING + \
+                       ("&limit=%d&sort=-lastTimeSeen&startDate=" % limit) + str(self.startTimeEpoch) + \
+                       "&timestampFilter=" + self.FOUND_DATE
 
-            if r.status_code == 504:
-                limit = 100
-                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
-                                                                        "/filter/?endDate=" + str(
-                    self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
-                                         "skip_links&quickFilter=" + self.SORTING + \
-                           "&limit=100&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
+            r = requests.get(url=endpoint, headers=self.header)
+            vulns = json.loads(r.text)
+            vuln_count = vulns['count']
+            print("\t- Number of vulns:", vuln_count)
+
+            for offset in range(limit, vuln_count, limit):
+
+                endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces/filter/?endDate=" + \
+                           str(self.endTimeEpoch) + \
+                           "&expand=application,servers,violations,bugtracker,skip_links&quickFilter=" + \
+                           self.SORTING + ("&limit=%d&offset=%d" % (limit, offset)) + \
+                           "&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
                            "&timestampFilter=" + self.FOUND_DATE
 
                 r = requests.get(url=endpoint, headers=self.header)
-                vulns = json.loads(r.text)
-                vuln_count = vulns['count']
-                print("\t- Number of vulns:", vuln_count)
-
-                for offset in range(limit, vuln_count, limit):
-
-                    endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces/filter/?endDate=" + \
-                               str(self.endTimeEpoch) + \
-                               "&expand=application,servers,violations,bugtracker,skip_links&quickFilter=" + \
-                               self.SORTING + ("&limit=%d&offset=%d" % (limit, offset)) + \
-                               "&sort=-lastTimeSeen&startDate=" + str(self.startTimeEpoch) + \
-                               "&timestampFilter=" + self.FOUND_DATE
-
-                    r = requests.get(url=endpoint, headers=self.header)
-                    next_vulns = json.loads(r.text)
-                    for vuln in next_vulns['traces']:
-                        vulns['traces'].append(vuln)
-                    print("\t\tVulns picked up: ", offset)
-
-                return self.getVulnMetrics(vulns['traces'])
-            else:
-
-                vulns = json.loads(r.text)
-                print(".... Done!")
-                return self.getVulnMetrics(vulns['traces'])
+                next_vulns = json.loads(r.text)
+                for vuln in next_vulns['traces']:
+                    vulns['traces'].append(vuln)
+                print("\t\tVulns picked up: ", offset)
+            print("\t\tVulns picked up: ", vulns['traces'].__len__())
+            return self.getVulnMetrics(vulns['traces'])
 
         except Exception as e:
-            print("ERROR: Unable to connect to teamserver. Please check your authentication details.")
+            print("\n!! ERROR: Unable to connect to teamserver. Please check your authentication details.")
             print(e)
             return {}
 
@@ -1402,7 +1314,7 @@ class controller:
         self.writeApplicationMetrics(applications)
 
     def getUsersInTaggedApplications(self):
-        untagged_applications = self.getApplicationsWithNoTag()
+        untagged_applications = self.getApplicationsWithNoTag(search_tag_text="BU:")
         self.getUsersInGroups(applications=untagged_applications)
 
     # Get application metrics (count of applications)
@@ -1504,9 +1416,54 @@ class controller:
                     app_license_status[application['app_id']] = False
         return app_license_status
 
-    def getApplicationsWithNoTag(self):
+    def getApplicationLibraryMetricsByTag(self, search_tag_text):
+
+        print("\nGetting vulnerable libraries for tagged applications\n\t- Searching for tag: '%s'" % search_tag_text)
+        tags = self.getAllApplicationTags(filterText=search_tag_text)
+        print("\t\t- Found %d tags which match filter text" % tags.__len__())
+
+        taggedApplication_library_mappings = {}
+        print("\t- Getting applications for each tag")
+        for tag in tags:
+            tagged_applications = self.getApplicationsWithTag(search_tag_text=tag)
+            taggedApplication_library_mappings[tag] = tagged_applications
+
+        print("\t- Getting vulnerable libraries for each application")
+        for tag, apps in taggedApplication_library_mappings.items():
+            for app in apps:
+                app_id = app['app_id']
+                vulnerable_libraries = self.getVulnerableLibraries_Application(app_id=app_id)
+                app.update({"libraries": vulnerable_libraries})
+                if vulnerable_libraries is not 0:
+                    app_libraries = app['libraries']
+                    for app_library in app_libraries:
+                        library_vulns = self.getLibraryCVEs(library_hash=app_library['hash'],
+                                                            library_language=app_library['app_language'])
+                        app_library.update({'vulns': library_vulns})
+
+        print(tagged_applications.__len__())
+
+    def writeApplicationLibraryMetricsByTag(self, tagged_apps_vulnerable_libs):
+        header = "Tag,Application Name,"
+
+    def getAllApplicationTags(self, filterText=None):
+        endpoint = "/applications/filters/tags/listing?expand=skip_links&filterText=&includeArchived=false&quickFilter=ALL"
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+
+        r = requests.get(url=url, headers=self.header)
+        all_tags = json.loads(r.text)
+
+        if filterText is not None:
+            filter_tags = []
+            for filter in all_tags['filters']:
+                if filter['label'].find(filterText) is not -1:
+                    filter_tags.append(filter['label'])
+            return filter_tags
+        else:
+            return all_tags
+
+    def getApplicationsWithNoTag(self, search_tag_text):
         # Text to search tags with
-        search_text = "BU:"
         endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
         url = self.TEAMSERVER_URL + endpoint
 
@@ -1524,7 +1481,7 @@ class controller:
             tags = application['tags']
             try:
                 for tag in tags:
-                    datatag = tag.find(search_text)
+                    datatag = tag.find(search_tag_text)
                     if datatag is not -1:
                         tagged = True
             except:
@@ -1536,10 +1493,65 @@ class controller:
                 untagged_applications.append(application['name'])
         return untagged_applications
 
+    def getApplicationsWithTag(self, search_tag_text):
+        # Text to search tags with
+        endpoint = self.ORGANIZATION_ID + "/applications?includeMerged=false&includeArchived=false"
+        url = self.TEAMSERVER_URL + endpoint
+
+        response = requests.get(url=url, headers=self.header, stream=True)
+        jsonreader = json.loads(response.text)
+
+        applications = jsonreader['applications']
+        app_count = 0
+        untagged_applications = []
+        for application in applications:
+            tagged = False
+            tags = application['tags']
+            try:
+                for tag in tags:
+                    datatag = tag.find(search_tag_text)
+                    if datatag is not -1:
+                        tagged = True
+            except:
+                # print(application['name'])
+                pass
+            if tagged:
+                app_count += 1
+                # print(str(app_count) + ". " + application['name'])
+                untagged_applications.append({'name': application['name'], 'app_id': application['app_id']})
+        return untagged_applications
+
+    def getVulnerableLibraries_Application(self, app_id):
+        endpoint = "/applications/%s/libraries/filter?expand=apps,quickFilters," \
+                   "skip_links&q=&quickFilter=VULNERABLE&sort=score" % app_id
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+
+        r = requests.get(url=url, headers=self.header)
+        app_vulnerable_libs = json.loads(r.text)
+        if app_vulnerable_libs['count'] == 0:
+            return 0
+        else:
+            return app_vulnerable_libs['libraries']
+
+    def getLibraryCVEs(self, library_hash, library_language):
+        print(library_hash)
+        if library_language == "Java":
+            url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/java/" + library_hash + \
+                  "?expand=apps,vulns,skip_link "
+        if library_language == ".NET":
+            url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/dotnet/" + library_hash + \
+                  "?expand=apps,vulns,skip_link "
+        if library_language == "Node":
+            url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/libraries/node/" + library_hash + \
+                  "?expand=apps,vulns,skip_link "
+        r = requests.get(url=url, headers=self.header)
+        library_details = json.loads(r.text)
+        return library_details['library']['vulns']
+
     def LibraryMetrics(self):
         print("\nGetting Library Metrics")
         # libraries = self.getLibraries()
-        self.writeVulnerableLibraries()
+        self.writeVulnerableLibraries(includeApplications=False)
 
     def getLibraries(self):
         endpoint = "/libraries"
@@ -1555,7 +1567,7 @@ class controller:
             print("Unable to retrieve libraries. Please check the connection details.")
             return -1
 
-    def writeVulnerableLibraries(self):
+    def writeVulnerableLibraries(self, includeApplications=True):
         endpoint = "/libraries/filter?expand=skip_links&q=&quickFilter=VULNERABLE&sort=score"
         url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
 
@@ -1565,9 +1577,13 @@ class controller:
         file_to_write = self.outputpath + "/VulnerableLibraries.csv"
         filewriter = open(file_to_write, 'w+')
 
-        file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
-                      "CVE IDs,Applications," \
-                      "Users\n "
+        if includeApplications:
+            file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
+                          "CVE IDs,Applications,Users\n"
+        else:
+            file_header = "Language,Library Name,Months Outdated,Number of Known CVEs,Number of High Severity CVEs," \
+                          "CVE IDs\n"
+
         library_lines = [file_header]
         all_applications = {}
 
@@ -1597,27 +1613,29 @@ class controller:
                             line_to_write += vuln['name'] + ' // '
                         line_to_write += ','
 
-                        for app in library_details['library']['apps']:
-                            line_to_write += app['name'] + " // "
-                        line_to_write += ','
+                        if includeApplications:
+                            for app in library_details['library']['apps']:
+                                line_to_write += app['name'] + " // "
+                            line_to_write += ','
 
-                        for app in library_details['library']['apps']:
-                            if all_applications.__len__() > 0:
-                                if app['name'] not in all_applications.keys():
+                            for app in library_details['library']['apps']:
+                                if all_applications.__len__() > 0:
+                                    if app['name'] not in all_applications.keys():
+                                        users_list = self.getUsersInGroups(applications=[app['name']],
+                                                                           return_object="list")
+                                        all_applications[app['name']] = users_list[app['name']]
+                                else:
                                     users_list = self.getUsersInGroups(applications=[app['name']], return_object="list")
                                     all_applications[app['name']] = users_list[app['name']]
-                            else:
-                                users_list = self.getUsersInGroups(applications=[app['name']], return_object="list")
-                                all_applications[app['name']] = users_list[app['name']]
-                            users_in_app = all_applications[app['name']]
-                            for user in users_in_app:
-                                line_to_write += user + ' // '
-                        line_to_write += ','
+                                users_in_app = all_applications[app['name']]
+                                for user in users_in_app:
+                                    line_to_write += user + ' // '
+                            line_to_write += ','
 
                     line_to_write += "\n"
                     library_lines.append(line_to_write)
 
-                    sys.stdout.write("\r%i libraries parsed" % count)
+                    sys.stdout.write("\r\t\t%i libraries parsed" % (count + 1))
                     sys.stdout.flush()
 
         for line in library_lines:
@@ -1638,13 +1656,13 @@ class controller:
         try:
             response = requests.get(url=url, headers=self.header, stream=True)
             jsonreader = json.loads(response.text)
-            #print (response.text)
+            # print (response.text)
 
-            return_value={}
+            return_value = {}
             return_value['protect'] = jsonreader['total_protection']
             return_value['assess'] = jsonreader['total_assessment']
 
-            #print (return_value)
+            # print (return_value)
 
             return return_value
 
@@ -1661,16 +1679,14 @@ class controller:
         try:
             response = requests.get(url=url, headers=self.header, stream=True)
             jsonreader = json.loads(response.text)
-            #print (response.text)
+            # print (response.text)
             return jsonreader['license_history']
         except Exception as e:
             print("ERROR: Unable to retrieve license history")
             print(e)
             print(response.text)
 
-
-    def writeLicenseHistory(self,license_history):
-
+    def writeLicenseHistory(self, license_history):
 
         licenses = self.getTotalLicenses()
 
@@ -1688,7 +1704,7 @@ class controller:
             license_history_linetowrite += str(datetime.fromtimestamp(
                 datapoint['timestamp'] / 1000.0).strftime(
                 '%Y-%m-%d')) + ','
-            #if licenses['assess'] != 0:
+            # if licenses['assess'] != 0:
             license_history_linetowrite += str(datapoint['assess']) + ','
             license_history_linetowrite += str(licenses['assess']) + ','
             license_history_linetowrite += str(datapoint['protect']) + ','
@@ -1699,8 +1715,6 @@ class controller:
             filewriter.write(line)
 
         filewriter.close()
-
-
 
     # Note this function requires: "pip3 install lxml" prior to generating graphs, also run
     # ApplicationMetrics() first
@@ -1769,7 +1783,7 @@ class controller:
                 protect.append(row[3])
                 protect_available.append(row[4])
 
-            # define chart data ---------------------
+                # define chart data ---------------------
         chart_data = ChartData()
         chart_data.categories = dates
         chart_data.add_series('Assess Available', assess_available)
@@ -1783,26 +1797,35 @@ class controller:
 
         chart.has_legend = True
         chart.legend.include_in_layout = False
-        #chart.series[0].smooth = True
+        # chart.series[0].smooth = True
 
         prs.save(self.outputpath + '/CBRTemplate.pptx')
 
 
 controller = controller()
+
+##### General metrics
 # controller.getServersWithNoApplications()
 # controller.getUsersNotLoggedInDays(days=90)
 # controller.getApplicationsWithNoGroup()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-
-controller.ApplicationMetrics()
 # controller.UsageMetrics(days=365)
-controller.VulnerabilityTrendMetrics(application_metrics=True)
-#controller.LibraryMetrics()
+# controller.getPercentUsersLoggedIn(365)
+# controller.getUsersInTaggedApplications()
+
+##### Application metrics
+# controller.ApplicationMetrics()
+
+##### Vulnerability metrics
+# controller.VulnerabilityTrendMetrics(application_metrics=True)
+
+##### Library metrics
+# controller.LibraryMetrics()
+# controller.getApplicationLibraryMetricsByTag(search_tag_text="demo")
 
 # Note this function requires: "pip3 install lxml" prior to generating graphs
-controller.generatePPT()
-# controller.getUsersInTaggedApplications()
+# controller.generatePPT()
+
 # controller.test()
-# controller.getPercentUsersLoggedIn(365)
