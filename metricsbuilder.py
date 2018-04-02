@@ -15,7 +15,7 @@ import requests
 class controller:
     ####################################################################
     #  Location of properties with connection details to the Contrast UI
-    properties_file = "script.properties"
+    properties_file = "script.propertiestest"
 
     header = {}
     application_licensed_status = {}
