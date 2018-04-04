@@ -15,7 +15,6 @@ import requests
 class controller:
     ####################################################################
     #  Location of properties with connection details to the Contrast UI
-    properties_file = "script.properties"
 
     header = {}
     application_licensed_status = {}
@@ -47,6 +46,8 @@ class controller:
         parser.add_argument("--VulnerabilityMetrics", help='Retrieve trending vulnerability metrics',
                             action='store_true')
         parser.add_argument("--ApplicationMetrics", help="Retrieve application metrics", action='store_true')
+        parser.add_argument("-am", help="Toggle whether to include application metrics in the Vulnerability Metrics",
+                            action='store_true')
 
         argt = parser.parse_args()
 
@@ -63,7 +64,10 @@ class controller:
         print("Writing output to", self.outputpath)
 
         if argt.VulnerabilityMetrics:
-            self.VulnerabilityTrendMetrics(application_metrics=True)
+            if argt.am:
+                self.VulnerabilityTrendMetrics(application_metrics=True)
+            else:
+                self.VulnerabilityTrendMetrics(application_metrics=False)
         if argt.ApplicationMetrics:
             self.ApplicationMetrics()
         if argt.LibraryMetrics:
@@ -803,7 +807,11 @@ class controller:
         - "Serious" vulnerabilities = vulnerabilities marked as Critical and High
         """
 
-        print("\n\nGetting Vulnerability Metrics")
+        if application_metrics is None:
+            print("\n\nGetting Vulnerability Metrics")
+        else:
+            print("\n\nGetting Vulnerability Metrics with Application Data")
+
         yearlyMetrics = self.dateTrendManager_Organization(printMetrics=printMetrics)
 
         # Generate cumulative counts for all retrieved vulnerabilities
@@ -986,7 +994,8 @@ class controller:
 
         if application_metrics:
             metrics_linetowrite = [
-                "Year,Month,Application Name,Environment,Critical,High,Medium,Low,Note,Total Traces,Serious Traces,"
+                "Year,Month,Application Name,Environment,Critical,High,Medium,Low,Note,Total Application Traces,"
+                "Total Monthly Traces,Serious Monthly Traces, "
                 "Cumulative Total Traces,Cumulative Serious Traces"]
 
             serious_category_header = "Year,Month"
@@ -1010,6 +1019,7 @@ class controller:
                                               + str(environment_metrics['medium']) + ',' + str(
                                 environment_metrics['low']) + ',' \
                                               + str(environment_metrics['note']) + ',' + str(
+                                app_metrics['total_traces']) + ',' + str(
                                 metrics['total_traces']) + ',' + \
                                               str(metrics['serious_traces']) + ',' + str(
                                 metrics['cumulative_total_traces']) + ',' \
@@ -1096,7 +1106,7 @@ class controller:
 
         try:
             # Get all vulns which need an issue opened for them
-            limit = 200
+            limit = 100
             endpoint = self.TEAMSERVER_URL + self.ORGANIZATION_ID + "/orgtraces" \
                                                                     "/filter/?endDate=" + str(
                 self.endTimeEpoch) + "&expand=application,servers,violations,bugtracker," \
@@ -1716,6 +1726,25 @@ class controller:
 
         filewriter.close()
 
+    def getAllUsers(self):
+        endpoint = "/users"
+        url = self.TEAMSERVER_URL + self.ORGANIZATION_ID + endpoint
+        r = requests.get(url=url, headers=self.header)
+
+        usersresponse = json.loads(r.text)
+
+        print(usersresponse)
+
+        filename = "/AllUsers.csv"
+        filepath = self.outputpath + filename
+        filewriter = open(file=filepath, mode='w+')
+
+        if usersresponse['success'] is True:
+            for user in usersresponse['users']:
+                filewriter.write(user['user_uid'])
+                filewriter.write("\n")
+            filewriter.close()
+
     # Note this function requires: "pip3 install lxml" prior to generating graphs, also run
     # ApplicationMetrics() first
     def generatePPT(self):
@@ -1811,7 +1840,7 @@ controller = controller()
 # controller.getNeverLoggedInUsers()
 # controller.getOfflineServers()
 # controller.getUsersInGroups()
-# controller.UsageMetrics(days=365)
+# controller.UsageMetrics(days=33)
 # controller.getPercentUsersLoggedIn(365)
 # controller.getUsersInTaggedApplications()
 
@@ -1819,7 +1848,7 @@ controller = controller()
 # controller.ApplicationMetrics()
 
 ##### Vulnerability metrics
-# controller.VulnerabilityTrendMetrics(application_metrics=True)
+controller.VulnerabilityTrendMetrics(application_metrics=True)
 
 ##### Library metrics
 # controller.LibraryMetrics()
@@ -1829,3 +1858,4 @@ controller = controller()
 # controller.generatePPT()
 
 # controller.test()
+# controller.getAllUsers()
