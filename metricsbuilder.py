@@ -1371,8 +1371,27 @@ class controller:
                 applications = json.loads(r.text)
                 print("\t- Number of applications:", applications['count'])
                 return applications
-        except:
+        except Exception as e:
             print("ERROR: Unable to retrieve applications")
+            print(e)
+            return {}
+
+    def getLicenseAndLOCStatus(self):
+        applications = self.getApplications()
+        file_to_write = self.outputpath + "/ApplicationsWithLOC.csv"
+        filewriter = open(file_to_write, 'w+')
+
+        file_header = "Application,Licenced,Total LOC,Custom LOC\n"
+        application_lines = [file_header]
+        if applications['count'] > 0:
+            for application in applications['applications']:
+                application_lines.append(application['name'] + ',' + application['license']['level'])
+                application_lines.append(',' + str(application['size_shorthand']) + ',' + str(application['code']) + '\n')
+
+        for line in application_lines:
+            filewriter.write(line)
+        filewriter.close()
+
 
     def writeApplicationMetrics(self, applications):
 
@@ -1846,9 +1865,10 @@ controller = controller()
 
 ##### Application metrics
 # controller.ApplicationMetrics()
+controller.getLicenseAndLOCStatus()
 
 ##### Vulnerability metrics
-controller.VulnerabilityTrendMetrics(application_metrics=True)
+#controller.VulnerabilityTrendMetrics(application_metrics=True)
 
 ##### Library metrics
 # controller.LibraryMetrics()
