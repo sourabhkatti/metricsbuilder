@@ -1847,6 +1847,31 @@ class controller:
         chart.legend.include_in_layout = False
         # chart.series[0].smooth = True
 
+
+        slide = prs.slides.add_slide(prs.slide_layouts[9])
+        title_placeholder = slide.shapes.title
+        title_placeholder.text = 'VULNERABILITY TREND'
+
+        # define chart data ---------------------
+        chart_data = ChartData()
+        months = []
+        serious_vulns = []
+        with open(self.outputpath + '/SeriousMetrics.csv') as csvDataFile:
+            csvReader = csv.reader(csvDataFile)
+            next(csvReader, None)
+            for row in csvReader:
+                    months.append(row[1])
+                    serious_vulns.append(row[10])
+
+        chart_data.categories = months
+        chart_data.add_series('Serious Vulnerabilities', serious_vulns)
+
+        # add chart to slide --------------------
+        x, y, cx, cy = Inches(2), Inches(1.05), Inches(10), Inches(6)
+        chart = slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED, x, y, cx, cy, chart_data
+        ).chart
+
         prs.save(self.outputpath + '/CBRTemplate.pptx')
 
 
@@ -1864,8 +1889,8 @@ controller = controller()
 # controller.getUsersInTaggedApplications()
 
 ##### Application metrics
-# controller.ApplicationMetrics()
-controller.getLicenseAndLOCStatus()
+controller.ApplicationMetrics()
+#controller.getLicenseAndLOCStatus()
 
 ##### Vulnerability metrics
 #controller.VulnerabilityTrendMetrics(application_metrics=True)
@@ -1875,7 +1900,7 @@ controller.getLicenseAndLOCStatus()
 # controller.getApplicationLibraryMetricsByTag(search_tag_text="demo")
 
 # Note this function requires: "pip3 install lxml" prior to generating graphs
-# controller.generatePPT()
+controller.generatePPT()
 
 # controller.test()
 # controller.getAllUsers()
